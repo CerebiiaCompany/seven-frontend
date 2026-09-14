@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { ReactNode, RefObject, useRef, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { motion, PanInfo } from "framer-motion";
+import { motion, MotionProps, PanInfo, useMotionValue } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +64,69 @@ const levelIcon = (l: number) => {
 
 const clamp = (n: number) => Math.min(97, Math.max(3, n));
 
+interface FieldDraggableProps {
+  fieldRef: RefObject<HTMLDivElement>;
+  x: number;
+  y: number;
+  onMove: (pos: { x: number; y: number }) => void;
+  className?: string;
+  title?: string;
+  onClick?: () => void;
+  onDoubleClick?: () => void;
+  initial?: MotionProps["initial"];
+  animate?: MotionProps["animate"];
+  transition?: MotionProps["transition"];
+  children: ReactNode;
+}
+
+/**
+ * Token arrastrable posicionado por porcentaje (`x`/`y`) sobre `fieldRef`.
+ *
+ * El `drag` de Framer Motion sigue el puntero aplicando su propio
+ * `transform` (vía motion values `x`/`y`) por encima del `left`/`top` ya
+ * fijado por CSS. Si al soltar solo actualizábamos `left`/`top` sin
+ * resetear esas motion values a 0, ese transform quedaba "pegado" y se
+ * sumaba sobre la nueva posición — el elemento terminaba desplazado del
+ * punto exacto donde se soltó. Por eso aquí:
+ * 1. El nuevo porcentaje se calcula con `info.offset` (delta del gesto
+ *    actual, en píxeles de pantalla) en vez de `info.point` (coordenadas
+ *    de página, que además se desalinean de `getBoundingClientRect()` —
+ *    que es relativo al viewport — en cuanto la página tiene scroll).
+ * 2. Tras soltar, `mx`/`my` se resetean a 0 para no arrastrar ese offset
+ *    visual a la siguiente vez que se mueva el elemento.
+ * `transformTemplate` reemplaza el centrado por clase (`-translate-x-1/2
+ * -translate-y-1/2`) para poder combinarlo con el transform de Framer sin
+ * que uno pise al otro.
+ */
+const FieldDraggable = ({ fieldRef, x, y, onMove, className, ...rest }: FieldDraggableProps) => {
+  const mx = useMotionValue(0);
+  const my = useMotionValue(0);
+
+  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const rect = fieldRef.current?.getBoundingClientRect();
+    mx.set(0);
+    my.set(0);
+    if (!rect) return;
+    onMove({
+      x: clamp(x + (info.offset.x / rect.width) * 100),
+      y: clamp(y + (info.offset.y / rect.height) * 100),
+    });
+  };
+
+  return (
+    <motion.div
+      drag
+      dragMomentum={false}
+      dragElastic={0}
+      onDragEnd={handleDragEnd}
+      transformTemplate={(_, generated) => `translate(-50%, -50%) ${generated}`}
+      style={{ x: mx, y: my, left: `${x}%`, top: `${y}%` }}
+      className={className}
+      {...rest}
+    />
+  );
+};
+
 const Gamification = () => {
   const [formation, setFormation] = useState("4-3-3");
   const [mode, setMode] = useState<"lineup" | "training">("lineup");
@@ -77,26 +140,11 @@ const Gamification = () => {
   const teamOverall = Math.round(players.reduce((a, p) => a + p.rating, 0) / players.length);
   const leaderboard = [...players].sort((a, b) => b.xp - a.xp);
 
-  const pointToPercent = (info: PanInfo) => {
-    const rect = fieldRef.current?.getBoundingClientRect();
-    if (!rect) return null;
-    return {
-      x: clamp(((info.point.x - rect.left) / rect.width) * 100),
-      y: clamp(((info.point.y - rect.top) / rect.height) * 100),
-    };
-  };
-
-  const movePlayer = (id: number, info: PanInfo) => {
-    const pos = pointToPercent(info);
-    if (!pos) return;
+  const movePlayer = (id: number, pos: { x: number; y: number }) =>
     setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...pos } : p)));
-  };
 
-  const moveObject = (id: number, info: PanInfo) => {
-    const pos = pointToPercent(info);
-    if (!pos) return;
+  const moveObject = (id: number, pos: { x: number; y: number }) =>
     setObjects((prev) => prev.map((o) => (o.id === id ? { ...o, ...pos } : o)));
-  };
 
   const addObject = (kind: ObjKind) => {
     const item = objCatalog.find((o) => o.kind === kind)!;
@@ -227,35 +275,33 @@ const Gamification = () => {
 
                 {/* Training objects */}
                 {objects.map((o) => (
-                  <motion.div
+                  <FieldDraggable
                     key={o.id}
-                    drag
-                    dragMomentum={false}
-                    dragElastic={0}
-                    onDragEnd={(_, info) => moveObject(o.id, info)}
+                    fieldRef={fieldRef}
+                    x={o.x}
+                    y={o.y}
+                    onMove={(pos) => moveObject(o.id, pos)}
                     onDoubleClick={() => setObjects((prev) => prev.filter((x) => x.id !== o.id))}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 z-20 cursor-grab active:cursor-grabbing select-none"
-                    style={{ left: `${o.x}%`, top: `${o.y}%` }}
+                    className="absolute z-20 cursor-grab active:cursor-grabbing select-none"
                     title={`${o.label} (doble clic para quitar)`}
                   >
                     <span className="text-2xl drop-shadow-md">{o.emoji}</span>
-                  </motion.div>
+                  </FieldDraggable>
                 ))}
 
                 {/* Players */}
                 {players.map((p) => (
-                  <motion.div
+                  <FieldDraggable
                     key={p.id}
-                    drag
-                    dragMomentum={false}
-                    dragElastic={0}
-                    onDragEnd={(_, info) => movePlayer(p.id, info)}
+                    fieldRef={fieldRef}
+                    x={p.x}
+                    y={p.y}
+                    onMove={(pos) => movePlayer(p.id, pos)}
                     onClick={() => setSelectedPlayer(p)}
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ delay: p.id * 0.03, type: "spring", stiffness: 200 }}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 group cursor-grab active:cursor-grabbing z-10 select-none"
-                    style={{ left: `${p.x}%`, top: `${p.y}%` }}
+                    className="absolute group cursor-grab active:cursor-grabbing z-10 select-none"
                   >
                     <div className="flex flex-col items-center gap-0.5">
                       <div
@@ -266,7 +312,7 @@ const Gamification = () => {
                       </div>
                       <span className="text-[10px] font-semibold text-white drop-shadow-md leading-tight">{p.name}</span>
                     </div>
-                  </motion.div>
+                  </FieldDraggable>
                 ))}
               </div>
             </div>
