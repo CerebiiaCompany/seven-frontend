@@ -166,10 +166,22 @@ const Gamification = () => {
       pdf.text(sessionName || "Sesión de entrenamiento", 15, 18);
       pdf.setFontSize(10);
       pdf.text(`Formación ${formation} · ${players.length} jugadores · ${objects.length} elementos`, 15, 25);
-      const w = 180;
-      const h = (canvas.height / canvas.width) * w;
-      pdf.addImage(img, "PNG", 15, 32, w, Math.min(h, 200));
-      let y = Math.min(h, 200) + 42;
+      // Encaja la captura dentro de una caja máxima de 180x200mm sin
+      // deformarla: se escala por el lado más restrictivo y el otro lado
+      // se deriva de la MISMA proporción de la imagen (nunca se fuerzan
+      // ancho y alto de forma independiente, que es lo que la estiraba).
+      const maxW = 180;
+      const maxH = 200;
+      const naturalRatio = canvas.width / canvas.height;
+      let w = maxW;
+      let h = w / naturalRatio;
+      if (h > maxH) {
+        h = maxH;
+        w = h * naturalRatio;
+      }
+      const x = 15 + (maxW - w) / 2;
+      pdf.addImage(img, "PNG", x, 32, w, h);
+      let y = h + 42;
       if (objects.length) {
         pdf.setFontSize(12);
         pdf.text("Materiales", 15, y);
