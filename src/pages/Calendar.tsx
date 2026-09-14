@@ -63,7 +63,7 @@ const mapEvent = (r: ApiTrainingSession): EventItem => {
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-const emptyForm = { type: "training", title: "", date: "", time: "", location: "" };
+const emptyForm = { type: "training", title: "", date: "", time: "", location: "", category: "" };
 
 export default function CalendarPage() {
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()));
@@ -75,6 +75,16 @@ export default function CalendarPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
+
+  // Categorías con deportistas confirmados — la asistencia del evento solo
+  // tiene sentido para una categoría que ya tenga convocados reales.
+  useEffect(() => {
+    api
+      .get<string[]>("/players/categories/")
+      .then(({ data }) => setCategories(data))
+      .catch(() => { /* el select queda vacío si falla */ });
+  }, []);
 
   const today = new Date();
   const daysInMonth = getDaysInMonth(monthDate);
@@ -122,6 +132,10 @@ export default function CalendarPage() {
       toast.error("Completa título, fecha y hora");
       return;
     }
+    if (!form.category) {
+      toast.error("Selecciona la categoría del evento");
+      return;
+    }
     setSaving(true);
     try {
       const scheduledAt = new Date(`${form.date}T${form.time}`).toISOString();
@@ -130,6 +144,7 @@ export default function CalendarPage() {
         event_type: form.type,
         scheduled_at: scheduledAt,
         location: form.location.trim(),
+        category: form.category,
       });
       const created = mapEvent(data);
       const createdMonth = parseISO(data.scheduled_at);
@@ -201,6 +216,20 @@ export default function CalendarPage() {
                       onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                     />
                   </div>
+                  <div>
+                    <Label>Categoría</Label>
+                    <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+                      <SelectTrigger><SelectValue placeholder="Selecciona una categoría" /></SelectTrigger>
+                      <SelectContent>
+                        {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    {categories.length === 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        No hay categorías con deportistas confirmados todavía.
+                      </p>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Fecha</Label>
@@ -219,7 +248,7 @@ export default function CalendarPage() {
                       onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
                     />
                   </div>
-                  <Button className="w-full" onClick={createEvent} disabled={saving}>
+                  <Button className="w-full" onClick={createEvent} disabled={saving || categories.length === 0}>
                     {saving ? "Creando..." : "Crear evento"}
                   </Button>
                 </div>
@@ -399,7 +428,7 @@ export default function CalendarPage() {
                 )}
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Button size="sm" className="gap-2 flex-1" asChild>
-                    <Link to="/attendance"><ClipboardCheck className="w-4 h-4" /> Pasar asistencia</Link>
+                    <Link to={`/attendance?session=${selected.id}`}><ClipboardCheck className="w-4 h-4" /> Pasar asistencia</Link>
                   </Button>
                   <Button size="sm" variant="outline" className="gap-2" onClick={() => toast.info("Edición de evento próximamente")}>
                     <Pencil className="w-4 h-4" /> Editar
