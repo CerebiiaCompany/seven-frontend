@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Search, Filter, ChevronRight, Pencil, Plus } from "lucide-react";
+import { Search, Filter, ChevronRight, Pencil, Plus, History } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,15 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+
+export interface PositionEntry {
+  id: string;
+  position: string;
+  season: string;
+  date: string;
+  note?: string;
+  by?: string;
+}
 
 export interface Player {
   id: number;
@@ -24,7 +33,25 @@ export interface Player {
   phone?: string;
   email?: string;
   guardian?: string;
+  positionHistory?: PositionEntry[];
 }
+
+export const currentSeason = () => {
+  const now = new Date();
+  return now.getMonth() >= 6 ? `${now.getFullYear()} - II` : `${now.getFullYear()} - I`;
+};
+
+export const makePositionEntry = (
+  position: string,
+  opts: { season?: string; note?: string; by?: string } = {}
+): PositionEntry => ({
+  id: `ph-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  position,
+  season: opts.season || currentSeason(),
+  date: new Date().toISOString(),
+  note: opts.note,
+  by: opts.by,
+});
 
 const defaultPlayers: Player[] = [
   { id: 1, name: "Juan Pérez", age: 16, category: "Sub-17", position: "Delantero", rating: 82, status: "active", goals: 12, assists: 8, phone: "300 123 4567", email: "juan@mail.com", guardian: "Marta Pérez" },
@@ -38,6 +65,7 @@ const defaultPlayers: Player[] = [
 ];
 
 const STORAGE_KEY = "sf_players";
+export const PLAYERS_STORAGE_KEY = STORAGE_KEY;
 
 export const loadPlayers = (): Player[] => {
   try {
@@ -47,8 +75,19 @@ export const loadPlayers = (): Player[] => {
   return defaultPlayers;
 };
 
+export const savePlayers = (players: Player[]) =>
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
+
+export const addPlayer = (player: Omit<Player, "id">): Player => {
+  const current = loadPlayers();
+  const created: Player = { ...player, id: Math.max(0, ...current.map((p) => p.id)) + 1 };
+  savePlayers([...current, created]);
+  return created;
+};
+
 const categories = ["Todas", "Sub-13", "Sub-15", "Sub-17"];
-const positions = ["Portero", "Defensa", "Mediocampista", "Delantero"];
+export const playerPositions = ["Portero", "Defensa", "Mediocampista", "Delantero"];
+const positions = playerPositions;
 
 const emptyPlayer: Player = {
   id: 0, name: "", age: 12, category: "Sub-13", position: "Mediocampista",
@@ -60,11 +99,19 @@ const Players = () => {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todas");
   const [editing, setEditing] = useState<Player | null>(null);
+  const [positionNote, setPositionNote] = useState("");
+  const [positionSeason, setPositionSeason] = useState(currentSeason());
   const navigate = useNavigate();
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
   }, [players]);
+
+  const openEditor = (player: Player) => {
+    setEditing(player);
+    setPositionNote("");
+    setPositionSeason(currentSeason());
+  };
 
   const filtered = players.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -78,12 +125,35 @@ const Players = () => {
       toast.error("El nombre es obligatorio");
       return;
     }
+    const previous = players.find((p) => p.id === editing.id);
+    const history = editing.positionHistory ?? [];
+    const positionChanged = !previous || previous.position !== editing.position;
+    const nextPlayer: Player = {
+      ...editing,
+      positionHistory:
+        positionChanged || history.length === 0
+          ? [
+              makePositionEntry(editing.position, {
+                season: positionSeason,
+                note: positionNote.trim() || undefined,
+                by: "Cuerpo técnico",
+              }),
+              ...history,
+            ]
+          : history,
+    };
     setPlayers((prev) =>
       editing.id === 0
-        ? [...prev, { ...editing, id: Math.max(0, ...prev.map((p) => p.id)) + 1 }]
-        : prev.map((p) => (p.id === editing.id ? editing : p))
+        ? [...prev, { ...nextPlayer, id: Math.max(0, ...prev.map((p) => p.id)) + 1 }]
+        : prev.map((p) => (p.id === editing.id ? nextPlayer : p))
     );
-    toast.success(editing.id === 0 ? "Deportista creado" : "Información actualizada");
+    toast.success(
+      editing.id === 0
+        ? "Deportista creado"
+        : positionChanged
+        ? "Información actualizada y cambio de posición registrado"
+        : "Información actualizada"
+    );
     setEditing(null);
   };
 
@@ -98,7 +168,7 @@ const Players = () => {
             <h1 className="text-2xl font-display font-bold text-foreground">Deportistas</h1>
             <p className="text-sm text-muted-foreground mt-1">{players.length} jugadores registrados</p>
           </div>
-          <Button className="gap-2" onClick={() => setEditing({ ...emptyPlayer })}>
+          <Button className="gap-2" onClick={() => openEditor({ ...emptyPlayer })}>
             <Plus className="w-4 h-4" /> Nuevo deportista
           </Button>
         </motion.div>
@@ -184,7 +254,7 @@ const Players = () => {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1 justify-end">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditing(player)} aria-label={`Editar ${player.name}`}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditor(player)} aria-label={`Editar ${player.name}`}>
                           <Pencil className="w-4 h-4" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/players/${player.id}`)} aria-label={`Ver ${player.name}`}>
@@ -253,6 +323,37 @@ const Players = () => {
                 <div><Label>Correo</Label><Input value={editing.email ?? ""} onChange={(e) => set("email", e.target.value)} /></div>
               </div>
               <div><Label>Acudiente</Label><Input value={editing.guardian ?? ""} onChange={(e) => set("guardian", e.target.value)} /></div>
+
+              <div className="rounded-lg border border-border p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <History className="w-4 h-4 text-primary" />
+                  <p className="text-sm font-semibold">Trazabilidad de posición</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label className="text-xs">Temporada</Label><Input value={positionSeason} onChange={(e) => setPositionSeason(e.target.value)} /></div>
+                  <div><Label className="text-xs">Motivo del cambio</Label><Input value={positionNote} placeholder="Decisión técnica" onChange={(e) => setPositionNote(e.target.value)} /></div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Si cambias la posición, se guarda un registro con la temporada, la fecha y el motivo.
+                </p>
+                {(editing.positionHistory?.length ?? 0) > 0 && (
+                  <div className="space-y-2 pt-1">
+                    {editing.positionHistory!.map((h) => (
+                      <div key={h.id} className="flex items-start gap-3 text-xs">
+                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-foreground font-medium">
+                            {h.position} <span className="text-muted-foreground font-normal">· {h.season}</span>
+                          </p>
+                          <p className="text-muted-foreground">
+                            {new Date(h.date).toLocaleDateString("es-CO")}{h.note ? ` — ${h.note}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" className="flex-1" onClick={() => setEditing(null)}>Cancelar</Button>
                 <Button className="flex-1" onClick={save}>Guardar cambios</Button>

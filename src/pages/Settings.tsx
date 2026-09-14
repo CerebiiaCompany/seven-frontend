@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import {
-  Building2, MapPin, Users, Bell, Shield, Plus, Trash2, Save, Upload, Palette,
+  Building2, MapPin, Users, Bell, Shield, Plus, Trash2, Save, Upload, Palette, UserCheck,
 } from "lucide-react";
+import { RegistrationsPanel } from "@/components/RegistrationsPanel";
 
 type Category = { id: string; name: string; ageRange: string; fee: number };
 type Venue = { id: string; name: string; address: string; type: string };
@@ -116,12 +117,18 @@ export default function SettingsPage() {
           <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
             <TabsList className="w-max">
               <TabsTrigger value="club" className="gap-1.5"><Building2 className="w-4 h-4" /> Club</TabsTrigger>
+              <TabsTrigger value="athletes" className="gap-1.5"><UserCheck className="w-4 h-4" /> Deportistas</TabsTrigger>
               <TabsTrigger value="categories" className="gap-1.5"><Users className="w-4 h-4" /> Categorías</TabsTrigger>
               <TabsTrigger value="venues" className="gap-1.5"><MapPin className="w-4 h-4" /> Sedes</TabsTrigger>
               <TabsTrigger value="team" className="gap-1.5"><Shield className="w-4 h-4" /> Usuarios</TabsTrigger>
               <TabsTrigger value="notifications" className="gap-1.5"><Bell className="w-4 h-4" /> Alertas</TabsTrigger>
             </TabsList>
           </div>
+
+          {/* DEPORTISTAS REGISTRADOS */}
+          <TabsContent value="athletes" className="space-y-4">
+            <RegistrationsPanel categories={s.categories.map((c) => c.name)} />
+          </TabsContent>
 
           {/* CLUB */}
           <TabsContent value="club" className="space-y-4">

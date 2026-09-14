@@ -53,7 +53,7 @@ export function SidebarNav({ collapsed = false, onNavigate }: SidebarContentProp
 
   return (
     <>
-      <nav className="sidebar-scroll flex-1 overflow-y-auto py-4 px-3 space-y-6">
+      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
         {navSections.map((section) => (
           <div key={section.label}>
             {!collapsed && (

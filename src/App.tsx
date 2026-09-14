@@ -22,6 +22,7 @@ import PublicRegister from "./pages/PublicRegister.tsx";
 import SettingsPage from "./pages/Settings.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Login from "./pages/Login.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/register/:formId" element={<PublicRegister />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/players" element={<ProtectedRoute><Players /></ProtectedRoute>} />

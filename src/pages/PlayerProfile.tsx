@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { ArrowLeft, Calendar, MapPin, Award, TrendingUp, Video, Upload, Play, Trash2 } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Award, TrendingUp, Video, Upload, Play, Trash2, History } from "lucide-react";
+import { loadPlayers, type PositionEntry } from "./Players";
 import { motion } from "framer-motion";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -45,7 +46,9 @@ const evolutionData = [
 const PlayerProfile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const player = playerData;
+  const stored = loadPlayers().find((p) => String(p.id) === String(id));
+  const player = stored ? { ...playerData, ...stored } : playerData;
+  const positionHistory: PositionEntry[] = stored?.positionHistory ?? [];
   const videosKey = `sf_player_videos_${id || "default"}`;
   const [videos, setVideos] = useState<PlayerVideo[]>([]);
   const [playing, setPlaying] = useState<PlayerVideo | null>(null);
@@ -172,6 +175,38 @@ const PlayerProfile = () => {
               </div>
             ))}
           </div>
+        </motion.div>
+
+        {/* Position traceability */}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} className="glass-card p-5 mt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <History className="w-4 h-4 text-primary" />
+            <h3 className="font-display font-semibold text-foreground">Trazabilidad de posiciones</h3>
+            <Badge variant="secondary" className="text-[10px]">{positionHistory.length}</Badge>
+          </div>
+          {positionHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Aún no hay cambios registrados. La posición actual es <span className="text-foreground font-medium">{player.position}</span>.
+            </p>
+          ) : (
+            <ol className="relative border-l border-border/70 ml-2 space-y-4">
+              {positionHistory.map((h, i) => (
+                <li key={h.id} className="pl-5">
+                  <span className={`absolute -left-[5px] mt-1.5 w-2.5 h-2.5 rounded-full ${i === 0 ? "bg-primary" : "bg-muted-foreground/50"}`} />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium text-foreground">{h.position}</p>
+                    {i === 0 && <Badge className="text-[10px]">Actual</Badge>}
+                    <span className="text-xs text-muted-foreground">Temporada {h.season}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {new Date(h.date).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" })}
+                    {h.by ? ` · ${h.by}` : ""}
+                  </p>
+                  {h.note && <p className="text-sm text-foreground mt-1">{h.note}</p>}
+                </li>
+              ))}
+            </ol>
+          )}
         </motion.div>
 
         {/* Video gallery */}
