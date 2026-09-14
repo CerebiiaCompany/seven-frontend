@@ -9,6 +9,7 @@ export type AuthUser = {
   full_name: string;
   phone_number: string;
   role: "player" | "coach" | "parent";
+  is_staff: boolean;
   is_verified: boolean;
   created_at: string;
 };

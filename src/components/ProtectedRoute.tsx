@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { LoaderCircle, Zap } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { canAccessPath, homePathFor } from "@/lib/access";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -22,6 +23,10 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (!canAccessPath(user, location.pathname)) {
+    return <Navigate to={homePathFor(user)} replace />;
   }
 
   return <>{children}</>;

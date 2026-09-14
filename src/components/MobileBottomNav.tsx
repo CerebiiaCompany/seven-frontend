@@ -4,24 +4,30 @@ import { LayoutDashboard, Trophy, Briefcase, User, Settings, LogOut } from "luci
 import { navSections } from "./AppSidebar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
+import { filterNavSections } from "@/lib/access";
 
-const tabs = [
-  { key: "Principal", label: "Principal", icon: LayoutDashboard },
-  { key: "Deportivo", label: "Deportivo", icon: Trophy },
-  { key: "Administración", label: "Admin", icon: Briefcase },
-];
+const TAB_META: Record<string, { label: string; icon: typeof LayoutDashboard }> = {
+  Principal: { label: "Principal", icon: LayoutDashboard },
+  Deportivo: { label: "Deportivo", icon: Trophy },
+  Administración: { label: "Admin", icon: Briefcase },
+};
 
 export function MobileBottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const [openKey, setOpenKey] = useState<string | null>(null);
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
 
-  const section = navSections.find((s) => s.label === openKey);
+  const sections = filterNavSections(navSections, user);
+  const tabs = sections
+    .filter((s) => TAB_META[s.label])
+    .map((s) => ({ key: s.label, ...TAB_META[s.label] }));
+
+  const section = sections.find((s) => s.label === openKey);
   const isProfile = openKey === "Perfil";
 
   const sectionActive = (key: string) =>
-    navSections
+    sections
       .find((s) => s.label === key)
       ?.items.some((i) => i.path === location.pathname) ?? false;
 
@@ -33,11 +39,12 @@ export function MobileBottomNav() {
   return (
     <>
       <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t grid grid-cols-4"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t grid"
         style={{
           background: "hsl(var(--sidebar-bg))",
           borderColor: "hsl(var(--sidebar-border))",
           paddingBottom: "env(safe-area-inset-bottom)",
+          gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))`,
         }}
       >
         {tabs.map((t) => {

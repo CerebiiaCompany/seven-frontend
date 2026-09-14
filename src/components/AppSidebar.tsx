@@ -6,6 +6,7 @@ import {
   Zap, FileText, ClipboardCheck, LogOut
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { filterNavSections } from "@/lib/access";
 
 export const navSections = [
   {
@@ -45,6 +46,8 @@ interface SidebarContentProps {
 export function SidebarNav({ collapsed = false, onNavigate }: SidebarContentProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
+  const sections = filterNavSections(navSections, user);
 
   const go = (path: string) => {
     navigate(path);
@@ -53,8 +56,8 @@ export function SidebarNav({ collapsed = false, onNavigate }: SidebarContentProp
 
   return (
     <>
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
-        {navSections.map((section) => (
+      <nav className="sidebar-scroll flex-1 overflow-y-auto py-4 px-3 space-y-6">
+        {sections.map((section) => (
           <div key={section.label}>
             {!collapsed && (
               <p className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-3"
