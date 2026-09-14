@@ -1,15 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { isAxiosError } from "axios";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Search, Filter, ChevronRight, Pencil, Plus, History } from "lucide-react";
+import { Search, Filter, ChevronRight, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
+import { Card } from "@/components/ui/card";
+import api from "@/lib/api";
+
+// ---------------------------------------------------------------------------
+// Tipos compartidos con PlayerProfile.tsx (trazabilidad de posición y ficha
+// local de video/observaciones, que aún no tienen respaldo en el backend).
+// ---------------------------------------------------------------------------
 
 export interface PositionEntry {
   id: string;
@@ -21,7 +24,7 @@ export interface PositionEntry {
 }
 
 export interface Player {
-  id: number;
+  id: string;
   name: string;
   age: number;
   category: string;
@@ -36,34 +39,23 @@ export interface Player {
   positionHistory?: PositionEntry[];
 }
 
-export const currentSeason = () => {
-  const now = new Date();
-  return now.getMonth() >= 6 ? `${now.getFullYear()} - II` : `${now.getFullYear()} - I`;
-};
+interface ApiPlayer {
+  id: string;
+  full_name: string;
+  email: string;
+  phone_number: string;
+  birth_date: string;
+  document_id: string;
+  city: string;
+  guardian_name: string;
+  status: "pending" | "confirmed" | "rejected";
+  category: string;
+  position: string;
+  created_at: string;
+}
 
-export const makePositionEntry = (
-  position: string,
-  opts: { season?: string; note?: string; by?: string } = {}
-): PositionEntry => ({
-  id: `ph-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-  position,
-  season: opts.season || currentSeason(),
-  date: new Date().toISOString(),
-  note: opts.note,
-  by: opts.by,
-});
-
-const defaultPlayers: Player[] = [
-  { id: 1, name: "Juan Pérez", age: 16, category: "Sub-17", position: "Delantero", rating: 82, status: "active", goals: 12, assists: 8, phone: "300 123 4567", email: "juan@mail.com", guardian: "Marta Pérez" },
-  { id: 2, name: "Carlos Díaz", age: 14, category: "Sub-15", position: "Mediocampista", rating: 75, status: "active", goals: 5, assists: 14, phone: "301 222 1111", email: "carlos@mail.com", guardian: "Luis Díaz" },
-  { id: 3, name: "María López", age: 15, category: "Sub-17", position: "Defensa", rating: 78, status: "active", goals: 2, assists: 6, phone: "302 333 2222", email: "maria@mail.com", guardian: "Ana López" },
-  { id: 4, name: "Andrés Gómez", age: 13, category: "Sub-13", position: "Portero", rating: 71, status: "inactive", goals: 0, assists: 1, phone: "303 444 3333", email: "andres@mail.com", guardian: "Pedro Gómez" },
-  { id: 5, name: "Sofía Ramírez", age: 16, category: "Sub-17", position: "Mediocampista", rating: 85, status: "active", goals: 9, assists: 11, phone: "304 555 4444", email: "sofia@mail.com", guardian: "Elena Ramírez" },
-  { id: 6, name: "Diego Torres", age: 14, category: "Sub-15", position: "Delantero", rating: 79, status: "active", goals: 15, assists: 3, phone: "305 666 5555", email: "diego@mail.com", guardian: "Jorge Torres" },
-  { id: 7, name: "Valentina Cruz", age: 12, category: "Sub-13", position: "Defensa", rating: 68, status: "active", goals: 1, assists: 4, phone: "306 777 6666", email: "valentina@mail.com", guardian: "Rosa Cruz" },
-  { id: 8, name: "Mateo Herrera", age: 15, category: "Sub-15", position: "Mediocampista", rating: 73, status: "trial", goals: 3, assists: 7, phone: "307 888 7777", email: "mateo@mail.com", guardian: "Iván Herrera" },
-];
-
+// Caché local (por id de backend) para que PlayerProfile.tsx pueda resolver
+// un deportista por id sin repetir el fetch. Se alimenta desde esta página.
 const STORAGE_KEY = "sf_players";
 export const PLAYERS_STORAGE_KEY = STORAGE_KEY;
 
@@ -72,93 +64,107 @@ export const loadPlayers = (): Player[] => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch { /* ignore */ }
-  return defaultPlayers;
+  return [];
 };
 
-export const savePlayers = (players: Player[]) =>
+const savePlayers = (players: Player[]) =>
   localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
 
-export const addPlayer = (player: Omit<Player, "id">): Player => {
-  const current = loadPlayers();
-  const created: Player = { ...player, id: Math.max(0, ...current.map((p) => p.id)) + 1 };
-  savePlayers([...current, created]);
-  return created;
+const cachePlayers = (fetched: Player[]) => {
+  const merged = new Map(loadPlayers().map((p) => [p.id, p]));
+  fetched.forEach((p) => merged.set(p.id, p));
+  savePlayers(Array.from(merged.values()));
 };
 
-const categories = ["Todas", "Sub-13", "Sub-15", "Sub-17"];
 export const playerPositions = ["Portero", "Defensa", "Mediocampista", "Delantero"];
-const positions = playerPositions;
 
-const emptyPlayer: Player = {
-  id: 0, name: "", age: 12, category: "Sub-13", position: "Mediocampista",
-  rating: 60, status: "active", goals: 0, assists: 0, phone: "", email: "", guardian: "",
+const ageFrom = (birth: string | null | undefined) => {
+  if (!birth) return null;
+  const d = new Date(birth);
+  if (Number.isNaN(d.getTime())) return null;
+  const diff = Date.now() - d.getTime();
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25)));
 };
+
+const mapApiPlayer = (r: ApiPlayer): Player => ({
+  id: r.id,
+  name: r.full_name || "Sin nombre",
+  age: ageFrom(r.birth_date) ?? 0,
+  category: r.category || "Sin categoría",
+  position: r.position || "Sin posición",
+  rating: 0,
+  status: r.status,
+  goals: 0,
+  assists: 0,
+  phone: r.phone_number,
+  email: r.email,
+  guardian: r.guardian_name,
+});
+
+const ALL_CATEGORIES = "Todas";
 
 const Players = () => {
-  const [players, setPlayers] = useState<Player[]>(loadPlayers);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("Todas");
-  const [editing, setEditing] = useState<Player | null>(null);
-  const [positionNote, setPositionNote] = useState("");
-  const [positionSeason, setPositionSeason] = useState(currentSeason());
+  const [selectedCategory, setSelectedCategory] = useState(ALL_CATEGORIES);
+  const [loading, setLoading] = useState(true);
+  const [denied, setDenied] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
-  }, [players]);
+    api
+      .get<string[]>("/players/categories/")
+      .then(({ data }) => setCategories(data))
+      .catch(() => { /* el filtro queda solo con "Todas" si falla */ });
+  }, []);
 
-  const openEditor = (player: Player) => {
-    setEditing(player);
-    setPositionNote("");
-    setPositionSeason(currentSeason());
-  };
-
-  const filtered = players.filter((p) => {
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
-    const matchCat = selectedCategory === "Todas" || p.category === selectedCategory;
-    return matchSearch && matchCat;
-  });
-
-  const save = () => {
-    if (!editing) return;
-    if (!editing.name.trim()) {
-      toast.error("El nombre es obligatorio");
-      return;
+  // El filtro de categoría (y el de "solo confirmados") se envían al backend
+  // como query params — el servidor es quien realmente restringe los datos,
+  // no solo la interfaz.
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get<{ results: ApiPlayer[] }>("/players/", {
+        params: {
+          status: "confirmed",
+          category: selectedCategory === ALL_CATEGORIES ? undefined : selectedCategory,
+          page_size: 100,
+        },
+      });
+      const mapped = data.results.map(mapApiPlayer);
+      setDenied(false);
+      setPlayers(mapped);
+      cachePlayers(mapped);
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 403) {
+        setDenied(true);
+      }
+    } finally {
+      setLoading(false);
     }
-    const previous = players.find((p) => p.id === editing.id);
-    const history = editing.positionHistory ?? [];
-    const positionChanged = !previous || previous.position !== editing.position;
-    const nextPlayer: Player = {
-      ...editing,
-      positionHistory:
-        positionChanged || history.length === 0
-          ? [
-              makePositionEntry(editing.position, {
-                season: positionSeason,
-                note: positionNote.trim() || undefined,
-                by: "Cuerpo técnico",
-              }),
-              ...history,
-            ]
-          : history,
-    };
-    setPlayers((prev) =>
-      editing.id === 0
-        ? [...prev, { ...nextPlayer, id: Math.max(0, ...prev.map((p) => p.id)) + 1 }]
-        : prev.map((p) => (p.id === editing.id ? nextPlayer : p))
-    );
-    toast.success(
-      editing.id === 0
-        ? "Deportista creado"
-        : positionChanged
-        ? "Información actualizada y cambio de posición registrado"
-        : "Información actualizada"
-    );
-    setEditing(null);
-  };
+  }, [selectedCategory]);
 
-  const set = <K extends keyof Player>(key: K, value: Player[K]) =>
-    setEditing((e) => (e ? { ...e, [key]: value } : e));
+  useEffect(() => { load(); }, [load]);
+
+  // El buscador solo refina en el cliente sobre el subconjunto ya filtrado
+  // por el backend (confirmados + categoría), nunca sobre el listado completo.
+  const filtered = useMemo(
+    () => players.filter((p) => p.name.toLowerCase().includes(search.toLowerCase())),
+    [players, search]
+  );
+
+  if (denied) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px]">
+          <Card className="p-6 text-sm text-muted-foreground">
+            Tu cuenta no tiene permiso para ver el listado de deportistas. Pide al administrador del club que te asigne el rol de entrenador o administrador.
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -166,10 +172,10 @@ const Players = () => {
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground">Deportistas</h1>
-            <p className="text-sm text-muted-foreground mt-1">{players.length} jugadores registrados</p>
+            <p className="text-sm text-muted-foreground mt-1">{players.length} deportistas confirmados</p>
           </div>
-          <Button className="gap-2" onClick={() => openEditor({ ...emptyPlayer })}>
-            <Plus className="w-4 h-4" /> Nuevo deportista
+          <Button variant="outline" className="gap-2" onClick={load} disabled={loading}>
+            <RefreshCw className="w-4 h-4" /> Actualizar
           </Button>
         </motion.div>
 
@@ -187,7 +193,7 @@ const Players = () => {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Filter className="w-4 h-4 text-muted-foreground" />
-            {categories.map((cat) => (
+            {[ALL_CATEGORIES, ...categories].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
@@ -212,156 +218,70 @@ const Players = () => {
                   <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-5 py-3">Jugador</th>
                   <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-5 py-3">Categoría</th>
                   <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-5 py-3">Posición</th>
-                  <th className="text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider px-5 py-3">Goles</th>
-                  <th className="text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider px-5 py-3">Asist.</th>
-                  <th className="text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider px-5 py-3">Rating</th>
+                  <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-5 py-3">Contacto</th>
                   <th className="text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider px-5 py-3">Estado</th>
                   <th className="px-5 py-3"></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((player) => (
-                  <tr
-                    key={player.id}
-                    className="border-b border-border/50 hover:bg-muted/50 transition-colors"
-                  >
-                    <td className="px-5 py-3.5 cursor-pointer" onClick={() => navigate(`/players/${player.id}`)}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                          {player.name.split(" ").map((n) => n[0]).join("")}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{player.name}</p>
-                          <p className="text-xs text-muted-foreground">{player.age} años</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-foreground">{player.category}</td>
-                    <td className="px-5 py-3.5 text-sm text-foreground">{player.position}</td>
-                    <td className="px-5 py-3.5 text-sm text-foreground text-center font-medium">{player.goals}</td>
-                    <td className="px-5 py-3.5 text-sm text-foreground text-center font-medium">{player.assists}</td>
-                    <td className="px-5 py-3.5 text-center">
-                      <span className={`text-sm font-bold ${
-                        player.rating >= 80 ? "text-kpi-green" : player.rating >= 70 ? "text-kpi-amber" : "text-kpi-red"
-                      }`}>
-                        {player.rating}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-center">
-                      <Badge variant={player.status === "active" ? "default" : player.status === "trial" ? "secondary" : "outline"}>
-                        {player.status === "active" ? "Activo" : player.status === "trial" ? "Prueba" : "Inactivo"}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-1 justify-end">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditor(player)} aria-label={`Editar ${player.name}`}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/players/${player.id}`)} aria-label={`Ver ${player.name}`}>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                        </Button>
-                      </div>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="text-center text-sm text-muted-foreground py-10">Cargando deportistas...</td>
+                  </tr>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="text-center text-sm text-muted-foreground py-10">
+                      No hay deportistas confirmados{selectedCategory !== ALL_CATEGORIES ? ` en ${selectedCategory}` : ""}.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filtered.map((player) => (
+                    <tr
+                      key={player.id}
+                      className="border-b border-border/50 hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/players/${player.id}`)}
+                    >
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                            {player.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{player.name}</p>
+                            <p className="text-xs text-muted-foreground">{player.age} años</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm text-foreground">{player.category}</td>
+                      <td className="px-5 py-3.5 text-sm text-foreground">{player.position}</td>
+                      <td className="px-5 py-3.5 text-sm text-muted-foreground">
+                        <p>{player.email || "—"}</p>
+                        {player.phone && <p className="text-xs">{player.phone}</p>}
+                      </td>
+                      <td className="px-5 py-3.5 text-center">
+                        <Badge>Confirmado</Badge>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/players/${player.id}`); }}
+                            aria-label={`Ver ${player.name}`}
+                          >
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </motion.div>
       </div>
-
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editing?.id === 0 ? "Nuevo deportista" : "Editar deportista"}</DialogTitle>
-            <DialogDescription>Actualiza los datos personales y deportivos</DialogDescription>
-          </DialogHeader>
-          {editing && (
-            <div className="space-y-4 pt-1">
-              <div><Label>Nombre completo</Label><Input value={editing.name} onChange={(e) => set("name", e.target.value)} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Edad</Label><Input type="number" value={editing.age} onChange={(e) => set("age", Number(e.target.value))} /></div>
-                <div>
-                  <Label>Categoría</Label>
-                  <Select value={editing.category} onValueChange={(v) => set("category", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {categories.filter((c) => c !== "Todas").map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Posición</Label>
-                  <Select value={editing.position} onValueChange={(v) => set("position", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {positions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Estado</Label>
-                  <Select value={editing.status} onValueChange={(v) => set("status", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Activo</SelectItem>
-                      <SelectItem value="trial">Prueba</SelectItem>
-                      <SelectItem value="inactive">Inactivo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div><Label>Goles</Label><Input type="number" value={editing.goals} onChange={(e) => set("goals", Number(e.target.value))} /></div>
-                <div><Label>Asistencias</Label><Input type="number" value={editing.assists} onChange={(e) => set("assists", Number(e.target.value))} /></div>
-                <div><Label>Rating</Label><Input type="number" value={editing.rating} onChange={(e) => set("rating", Number(e.target.value))} /></div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Teléfono</Label><Input value={editing.phone ?? ""} onChange={(e) => set("phone", e.target.value)} /></div>
-                <div><Label>Correo</Label><Input value={editing.email ?? ""} onChange={(e) => set("email", e.target.value)} /></div>
-              </div>
-              <div><Label>Acudiente</Label><Input value={editing.guardian ?? ""} onChange={(e) => set("guardian", e.target.value)} /></div>
-
-              <div className="rounded-lg border border-border p-3 space-y-3">
-                <div className="flex items-center gap-2">
-                  <History className="w-4 h-4 text-primary" />
-                  <p className="text-sm font-semibold">Trazabilidad de posición</p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><Label className="text-xs">Temporada</Label><Input value={positionSeason} onChange={(e) => setPositionSeason(e.target.value)} /></div>
-                  <div><Label className="text-xs">Motivo del cambio</Label><Input value={positionNote} placeholder="Decisión técnica" onChange={(e) => setPositionNote(e.target.value)} /></div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Si cambias la posición, se guarda un registro con la temporada, la fecha y el motivo.
-                </p>
-                {(editing.positionHistory?.length ?? 0) > 0 && (
-                  <div className="space-y-2 pt-1">
-                    {editing.positionHistory!.map((h) => (
-                      <div key={h.id} className="flex items-start gap-3 text-xs">
-                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-foreground font-medium">
-                            {h.position} <span className="text-muted-foreground font-normal">· {h.season}</span>
-                          </p>
-                          <p className="text-muted-foreground">
-                            {new Date(h.date).toLocaleDateString("es-CO")}{h.note ? ` — ${h.note}` : ""}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button variant="outline" className="flex-1" onClick={() => setEditing(null)}>Cancelar</Button>
-                <Button className="flex-1" onClick={save}>Guardar cambios</Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 };
