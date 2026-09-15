@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { isAxiosError } from "axios";
-import { format, isSameDay, parseISO, startOfMonth } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/ui/card";
@@ -85,40 +85,26 @@ export default function Attendance() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyDetail, setHistoryDetail] = useState<SessionAttendanceResponse | null>(null);
 
-  // Sesiones del mes actual para el selector — cada una es una fecha/sesión
-  // independiente. Si se llega desde "Pasar asistencia" de un evento puntual
-  // (?session=) que no cae en el mes actual, se agrega también esa sesión
-  // para que quede preseleccionada correctamente.
+  // Sesiones del selector: únicamente los eventos de HOY. El día se calcula
+  // en el servidor (`/training-sessions/today/`, a partir de la fecha real
+  // de cada evento) — nunca se filtra por una fecha calculada en el cliente,
+  // así que no aparecen eventos de días anteriores ni futuros.
   useEffect(() => {
-    const monthDate = startOfMonth(new Date());
     api
-      .get<{ results: ApiSessionBrief[] }>("/training-sessions/", {
-        params: { year: monthDate.getFullYear(), month: monthDate.getMonth() + 1, page_size: 100 },
-      })
-      .then(async ({ data }) => {
+      .get<ApiSessionBrief[]>("/training-sessions/today/")
+      .then(({ data }) => {
         setDenied(false);
-        let list = data.results;
+        setSessions(data);
 
-        if (requestedSessionId && !list.some((s) => s.id === requestedSessionId)) {
-          try {
-            const { data: extra } = await api.get<ApiSessionBrief>(`/training-sessions/${requestedSessionId}/`);
-            list = [extra, ...list];
-          } catch { /* el evento no existe o no es accesible; se ignora */ }
-        }
-
-        setSessions(list);
-
-        const today = new Date();
         const defaultId =
-          (requestedSessionId && list.find((s) => s.id === requestedSessionId)?.id) ||
-          list.find((s) => isSameDay(parseISO(s.scheduled_at), today))?.id ||
-          list[0]?.id ||
+          (requestedSessionId && data.find((s) => s.id === requestedSessionId)?.id) ||
+          data[0]?.id ||
           "";
         if (defaultId) setSessionId(defaultId);
       })
       .catch((error) => {
         if (isAxiosError(error) && error.response?.status === 403) setDenied(true);
-        else toast.error("No se pudieron cargar las sesiones del calendario");
+        else toast.error("No se pudieron cargar las sesiones de hoy");
       })
       .finally(() => setSessionsLoading(false));
   }, [requestedSessionId]);
@@ -280,7 +266,7 @@ export default function Attendance() {
               </div>
 
               {!sessionsLoading && !sessions.length ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">No hay sesiones programadas este mes en el calendario.</p>
+                <p className="text-sm text-muted-foreground py-8 text-center">No hay sesiones programadas para hoy en el calendario.</p>
               ) : displaySession && (
                 <>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
