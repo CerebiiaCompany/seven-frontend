@@ -15,6 +15,58 @@ import html2canvas from "html2canvas";
 
 const formations = ["4-3-3", "4-4-2", "3-5-2", "4-2-3-1"];
 
+/**
+ * Coordenadas base (% relativo a la cancha) para cada formación, en el mismo
+ * orden en que aparecen los jugadores en `initialPlayers` (índice 0 = arquero,
+ * 1-4 = línea defensiva, 5-10 = resto del equipo). Solo se usan para calcular
+ * la posición inicial al cambiar de alineación; no se reordena ni se muta el
+ * arreglo de jugadores, así que el índice de cada jugador siempre corresponde
+ * a la misma entrada de la formación.
+ */
+const formationLayouts: Record<string, { x: number; y: number }[]> = {
+  "4-3-3": [
+    { x: 50, y: 92 }, // POR
+    { x: 35, y: 78 }, { x: 65, y: 78 }, // DFC, DFC
+    { x: 10, y: 70 }, { x: 90, y: 70 }, // LI, LD
+    { x: 50, y: 55 }, // MC
+    { x: 30, y: 48 }, { x: 70, y: 48 }, // MCO, MCO
+    { x: 15, y: 28 }, // EI
+    { x: 50, y: 22 }, // DC
+    { x: 85, y: 28 }, // ED
+  ],
+  "4-4-2": [
+    { x: 50, y: 92 }, // POR
+    { x: 35, y: 78 }, { x: 65, y: 78 }, // DFC, DFC
+    { x: 10, y: 72 }, { x: 90, y: 72 }, // LI, LD
+    { x: 38, y: 52 }, // MC -> CM izq.
+    { x: 62, y: 52 }, // MCO -> CM der.
+    { x: 12, y: 50 }, // MCO -> MI
+    { x: 88, y: 50 }, // EI -> MD
+    { x: 38, y: 22 }, // DC -> punta izq.
+    { x: 62, y: 22 }, // ED -> punta der.
+  ],
+  "3-5-2": [
+    { x: 50, y: 92 }, // POR
+    { x: 30, y: 80 }, { x: 70, y: 80 }, // DFC, DFC (línea de 3 con el central)
+    { x: 50, y: 82 }, { x: 90, y: 55 }, // LI -> central, LD -> carrilero der.
+    { x: 10, y: 55 }, // MC -> carrilero izq.
+    { x: 35, y: 48 }, { x: 65, y: 48 }, // MCO, MCO -> interiores
+    { x: 50, y: 42 }, // EI -> mediapunta
+    { x: 40, y: 22 }, // DC -> punta izq.
+    { x: 60, y: 22 }, // ED -> punta der.
+  ],
+  "4-2-3-1": [
+    { x: 50, y: 92 }, // POR
+    { x: 35, y: 78 }, { x: 65, y: 78 }, // DFC, DFC
+    { x: 10, y: 70 }, { x: 90, y: 70 }, // LI, LD
+    { x: 38, y: 58 }, { x: 62, y: 58 }, // MC, MCO -> doble pivote
+    { x: 20, y: 40 }, // MCO -> mediapunta izq.
+    { x: 50, y: 38 }, // EI -> mediapunta centro
+    { x: 80, y: 40 }, // DC -> mediapunta der.
+    { x: 50, y: 20 }, // ED -> punta única
+  ],
+};
+
 interface FieldPlayer {
   id: number; num: number; name: string; position: string;
   rating: number; level: number; xp: number; x: number; y: number;
@@ -143,6 +195,13 @@ const Gamification = () => {
   const movePlayer = (id: number, pos: { x: number; y: number }) =>
     setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, ...pos } : p)));
 
+  const applyFormation = (f: string) => {
+    setFormation(f);
+    const layout = formationLayouts[f];
+    if (!layout) return;
+    setPlayers((prev) => prev.map((p, i) => (layout[i] ? { ...p, x: layout[i].x, y: layout[i].y } : p)));
+  };
+
   const moveObject = (id: number, pos: { x: number; y: number }) =>
     setObjects((prev) => prev.map((o) => (o.id === id ? { ...o, ...pos } : o)));
 
@@ -236,7 +295,7 @@ const Gamification = () => {
           </Tabs>
           <div className="flex gap-2 overflow-x-auto">
             {formations.map((f) => (
-              <button key={f} onClick={() => setFormation(f)}
+              <button key={f} onClick={() => applyFormation(f)}
                 className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${formation === f ? "bg-primary text-primary-foreground shadow-md" : "glass-card text-muted-foreground hover:text-foreground"}`}>
                 {f}
               </button>
@@ -356,7 +415,7 @@ const Gamification = () => {
                   <Button variant="outline" size="sm" className="gap-1 flex-1" onClick={() => setObjects([])}>
                     <Trash2 className="w-3.5 h-3.5" /> Limpiar
                   </Button>
-                  <Button variant="outline" size="sm" className="gap-1 flex-1" onClick={() => setPlayers(initialPlayers)}>
+                  <Button variant="outline" size="sm" className="gap-1 flex-1" onClick={() => applyFormation("4-3-3")}>
                     <RotateCcw className="w-3.5 h-3.5" /> Reiniciar
                   </Button>
                 </div>
