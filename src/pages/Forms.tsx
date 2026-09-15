@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -13,36 +12,20 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  FileText, Plus, Link2, Copy, Trash2, Users, Eye, X, Mail, Phone, MessageCircle
+  FileText, Plus, Link2, Copy, Trash2, Users, Eye, X, Mail, Phone, MessageCircle,
+  Clock, MapPin, Smartphone, Globe, Loader2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-
-export type FormField = {
-  id: string;
-  label: string;
-  type: "text" | "email" | "phone" | "number" | "date" | "select" | "textarea";
-  required: boolean;
-  options?: string[];
-};
-
-export type FormDef = {
-  id: string;
-  title: string;
-  description: string;
-  fields: FormField[];
-  createdAt: string;
-};
-
-export type Submission = {
-  id: string;
-  formId: string;
-  data: Record<string, string>;
-  status: "new" | "contacted" | "enrolled" | "discarded";
-  createdAt: string;
-};
-
-const FORMS_KEY = "sf_forms_v1";
-const SUBS_KEY = "sf_form_submissions_v1";
+import {
+  createForm as apiCreateForm,
+  deleteForm as apiDeleteForm,
+  listForms,
+  listSubmissions,
+  updateSubmissionStatus,
+  type FormDef,
+  type FormField,
+  type Submission,
+} from "@/lib/forms";
 
 const defaultFields: FormField[] = [
   { id: "name", label: "Nombre completo del deportista", type: "text", required: true },
@@ -54,20 +37,30 @@ const defaultFields: FormField[] = [
   { id: "notes", label: "Comentarios adicionales", type: "textarea", required: false },
 ];
 
-export const loadForms = (): FormDef[] => {
-  try { return JSON.parse(localStorage.getItem(FORMS_KEY) || "[]"); } catch { return []; }
+const statusLabel: Record<Submission["status"], string> = {
+  new: "Nuevo",
+  contacted: "Contactado",
+  enrolled: "Inscrito",
+  discarded: "Descartado",
 };
-export const saveForms = (f: FormDef[]) => localStorage.setItem(FORMS_KEY, JSON.stringify(f));
-export const loadSubs = (): Submission[] => {
-  try { return JSON.parse(localStorage.getItem(SUBS_KEY) || "[]"); } catch { return []; }
+
+const formatDuration = (seconds: number | null) => {
+  if (seconds === null || seconds === undefined) return "—";
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 };
-export const saveSubs = (s: Submission[]) => localStorage.setItem(SUBS_KEY, JSON.stringify(s));
+
+const formatLocation = (s: Submission) => {
+  const parts = [s.location_city, s.location_region, s.location_country].filter(Boolean);
+  return parts.length ? parts.join(", ") : "No disponible";
+};
 
 const Forms = () => {
-  const navigate = useNavigate();
   const [forms, setForms] = useState<FormDef[]>([]);
   const [subs, setSubs] = useState<Submission[]>([]);
+  const [loading, setLoading] = useState(true);
   const [openCreate, setOpenCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [viewSub, setViewSub] = useState<Submission | null>(null);
   const [activeFormId, setActiveFormId] = useState<string>("all");
 
@@ -76,42 +69,49 @@ const Forms = () => {
   const [description, setDescription] = useState("Completa el formulario para registrarte en las pruebas.");
   const [fields, setFields] = useState<FormField[]>(defaultFields);
 
-  useEffect(() => {
-    const f = loadForms();
-    if (f.length === 0) {
-      const seed: FormDef = {
-        id: "insc-2026",
-        title: "Inscripción de jugadores 2026",
-        description: "Completa el formulario para registrarte en las pruebas de selección.",
-        fields: defaultFields,
-        createdAt: new Date().toISOString(),
-      };
-      saveForms([seed]);
-      setForms([seed]);
-    } else setForms(f);
-    setSubs(loadSubs());
-  }, []);
-
-  const filteredSubs = activeFormId === "all" ? subs : subs.filter((s) => s.formId === activeFormId);
-
-  const createForm = () => {
-    if (!title.trim()) return;
-    const newForm: FormDef = {
-      id: `f-${Date.now()}`,
-      title, description, fields,
-      createdAt: new Date().toISOString(),
-    };
-    const next = [newForm, ...forms];
-    setForms(next); saveForms(next);
-    setOpenCreate(false);
-    toast({ title: "Formulario creado", description: "Comparte el link con los candidatos." });
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      const [formsData, subsData] = await Promise.all([listForms(), listSubmissions()]);
+      setForms(formsData);
+      setSubs(subsData);
+    } catch {
+      toast({ title: "No se pudieron cargar los formularios", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const deleteForm = (id: string) => {
-    const next = forms.filter((f) => f.id !== id);
-    setForms(next); saveForms(next);
-    const ns = subs.filter((s) => s.formId !== id);
-    setSubs(ns); saveSubs(ns);
+  useEffect(() => {
+    loadAll();
+  }, []);
+
+  const filteredSubs = activeFormId === "all" ? subs : subs.filter((s) => s.form === activeFormId);
+
+  const createForm = async () => {
+    if (!title.trim()) return;
+    setCreating(true);
+    try {
+      const newForm = await apiCreateForm({ title, description, fields });
+      setForms((prev) => [newForm, ...prev]);
+      setOpenCreate(false);
+      toast({ title: "Formulario creado", description: "Comparte el link con los candidatos." });
+    } catch (err: any) {
+      const message = err?.response?.data?.error?.message || "No se pudo crear el formulario";
+      toast({ title: message, variant: "destructive" });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const deleteForm = async (id: string) => {
+    try {
+      await apiDeleteForm(id);
+      setForms((prev) => prev.filter((f) => f.id !== id));
+      if (activeFormId === id) setActiveFormId("all");
+    } catch {
+      toast({ title: "No se pudo eliminar el formulario", variant: "destructive" });
+    }
   };
 
   const copyLink = (id: string) => {
@@ -120,9 +120,14 @@ const Forms = () => {
     toast({ title: "Link copiado", description: url });
   };
 
-  const updateSubStatus = (id: string, status: Submission["status"]) => {
-    const next = subs.map((s) => s.id === id ? { ...s, status } : s);
-    setSubs(next); saveSubs(next);
+  const updateSubStatus = async (id: string, status: Submission["status"]) => {
+    try {
+      const updated = await updateSubmissionStatus(id, status);
+      setSubs((prev) => prev.map((s) => (s.id === id ? updated : s)));
+      setViewSub((prev) => (prev && prev.id === id ? updated : prev));
+    } catch {
+      toast({ title: "No se pudo actualizar el estado", variant: "destructive" });
+    }
   };
 
   const addField = () => {
@@ -192,12 +197,19 @@ const Forms = () => {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setOpenCreate(false)}>Cancelar</Button>
-                <Button onClick={createForm}>Crear</Button>
+                <Button onClick={createForm} disabled={creating}>
+                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Crear
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </motion.div>
 
+        {loading ? (
+          <div className="glass-card p-10 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> Cargando formularios...
+          </div>
+        ) : (
         <Tabs defaultValue="forms" className="space-y-5">
           <TabsList className="bg-muted/60">
             <TabsTrigger value="forms" className="text-xs gap-1.5"><FileText className="w-3.5 h-3.5" />Formularios ({forms.length})</TabsTrigger>
@@ -211,7 +223,7 @@ const Forms = () => {
               </div>
             )}
             {forms.map((f) => {
-              const count = subs.filter((s) => s.formId === f.id).length;
+              const count = f.submissions_count;
               return (
                 <motion.div key={f.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                   className="glass-card p-5 flex flex-col md:flex-row md:items-center gap-4">
@@ -219,6 +231,7 @@ const Forms = () => {
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-semibold text-foreground">{f.title}</h3>
                       <Badge variant="secondary" className="text-[10px]">{f.fields.length} campos</Badge>
+                      {!f.is_open && <Badge variant="destructive" className="text-[10px]">Cerrado</Badge>}
                     </div>
                     <p className="text-xs text-muted-foreground">{f.description}</p>
                     <p className="text-[11px] text-muted-foreground mt-2 flex items-center gap-1.5">
@@ -248,9 +261,9 @@ const Forms = () => {
               ) : (
                 <div className="divide-y divide-border">
                   {filteredSubs.map((s) => {
-                    const name = s.data.name || s.data["Nombre"] || "—";
-                    const phone = s.data.phone || s.data["Teléfono"] || "";
-                    const email = s.data.email || s.data["Correo"] || "";
+                    const name = s.answers.name || "—";
+                    const phone = s.answers.phone || "";
+                    const email = s.answers.email || "";
                     return (
                       <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/30">
                         <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
@@ -260,7 +273,7 @@ const Forms = () => {
                           <p className="font-semibold text-sm text-foreground truncate">{name}</p>
                           <p className="text-[11px] text-muted-foreground truncate">{email} · {phone}</p>
                         </div>
-                        <Badge variant="secondary" className="text-[10px] capitalize">{s.status}</Badge>
+                        <Badge variant="secondary" className="text-[10px] capitalize">{statusLabel[s.status]}</Badge>
                         <div className="flex gap-1">
                           {email && <Button variant="ghost" size="icon" asChild><a href={`mailto:${email}`}><Mail className="w-4 h-4" /></a></Button>}
                           {phone && <Button variant="ghost" size="icon" asChild><a href={`https://wa.me/${phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer"><MessageCircle className="w-4 h-4" /></a></Button>}
@@ -275,26 +288,54 @@ const Forms = () => {
             </div>
           </TabsContent>
         </Tabs>
+        )}
 
         <Dialog open={!!viewSub} onOpenChange={(o) => !o && setViewSub(null)}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Detalle de inscripción</DialogTitle></DialogHeader>
             {viewSub && (
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  {Object.entries(viewSub.data).map(([k, v]) => (
-                    <div key={k} className="flex justify-between gap-4 py-2 border-b border-border/50 text-sm">
-                      <span className="text-muted-foreground capitalize">{k}</span>
-                      <span className="text-foreground text-right">{v || "—"}</span>
-                    </div>
-                  ))}
+              <div className="space-y-4">
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Respuestas</p>
+                  <div className="space-y-1.5">
+                    {viewSub.form_snapshot.fields.map((field) => (
+                      <div key={field.id} className="flex justify-between gap-4 py-2 border-b border-border/50 text-sm">
+                        <span className="text-muted-foreground">{field.label}</span>
+                        <span className="text-foreground text-right">{viewSub.answers[field.id] || "—"}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Datos del envío</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-muted-foreground"><Clock className="w-3.5 h-3.5" />Fecha</div>
+                    <div className="text-foreground text-right">{new Date(viewSub.created_at).toLocaleString("es-CO")}</div>
+
+                    <div className="flex items-center gap-1.5 text-muted-foreground"><Clock className="w-3.5 h-3.5" />Duración</div>
+                    <div className="text-foreground text-right">{formatDuration(viewSub.duration_seconds)}</div>
+
+                    <div className="flex items-center gap-1.5 text-muted-foreground"><Globe className="w-3.5 h-3.5" />Dirección IP</div>
+                    <div className="text-foreground text-right">{viewSub.ip_address || "No disponible"}</div>
+
+                    <div className="flex items-center gap-1.5 text-muted-foreground"><MapPin className="w-3.5 h-3.5" />Ubicación</div>
+                    <div className="text-foreground text-right">{formatLocation(viewSub)}</div>
+
+                    <div className="flex items-center gap-1.5 text-muted-foreground"><Smartphone className="w-3.5 h-3.5" />Dispositivo</div>
+                    <div className="text-foreground text-right">{viewSub.device_name || viewSub.device_type || "—"}</div>
+
+                    <div className="text-muted-foreground">Sistema operativo</div>
+                    <div className="text-foreground text-right">{viewSub.operating_system || "—"}</div>
+
+                    <div className="text-muted-foreground">Navegador</div>
+                    <div className="text-foreground text-right">{viewSub.browser || "—"}</div>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label>Estado</Label>
-                  <Select value={viewSub.status} onValueChange={(v) => {
-                    updateSubStatus(viewSub.id, v as Submission["status"]);
-                    setViewSub({ ...viewSub, status: v as Submission["status"] });
-                  }}>
+                  <Select value={viewSub.status} onValueChange={(v) => updateSubStatus(viewSub.id, v as Submission["status"])}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="new">Nuevo</SelectItem>
