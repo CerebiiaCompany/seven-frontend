@@ -14,8 +14,8 @@ import {
   Building2, MapPin, Users, Bell, Shield, Plus, Trash2, Save, Upload, Palette, UserCheck,
 } from "lucide-react";
 import { RegistrationsPanel } from "@/components/RegistrationsPanel";
+import { CategoriesPanel } from "@/components/CategoriesPanel";
 
-type Category = { id: string; name: string; ageRange: string; fee: number };
 type Venue = { id: string; name: string; address: string; type: string };
 type Member = { id: string; name: string; email: string; role: string };
 
@@ -31,7 +31,6 @@ interface ClubSettings {
   currency: string;
   timezone: string;
   accent: string;
-  categories: Category[];
   venues: Venue[];
   members: Member[];
   notifications: {
@@ -54,12 +53,6 @@ const DEFAULTS: ClubSettings = {
   currency: "COP",
   timezone: "America/Bogota",
   accent: "153 60% 38%",
-  categories: [
-    { id: "c1", name: "Sub-11", ageRange: "9-11 años", fee: 120000 },
-    { id: "c2", name: "Sub-13", ageRange: "12-13 años", fee: 140000 },
-    { id: "c3", name: "Sub-15", ageRange: "14-15 años", fee: 160000 },
-    { id: "c4", name: "Sub-17", ageRange: "16-17 años", fee: 180000 },
-  ],
   venues: [
     { id: "v1", name: "Cancha 1", address: "Sede Principal", type: "Grama sintética" },
     { id: "v2", name: "Cancha 2", address: "Sede Principal", type: "Grama natural" },
@@ -85,6 +78,7 @@ const accents = [
 
 export default function SettingsPage() {
   const [s, setS] = useState<ClubSettings>(DEFAULTS);
+  const [categoryNames, setCategoryNames] = useState<string[]>([]);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -127,7 +121,7 @@ export default function SettingsPage() {
 
           {/* DEPORTISTAS REGISTRADOS */}
           <TabsContent value="athletes" className="space-y-4">
-            <RegistrationsPanel categories={s.categories.map((c) => c.name)} />
+            <RegistrationsPanel categories={categoryNames} />
           </TabsContent>
 
           {/* CLUB */}
@@ -207,52 +201,7 @@ export default function SettingsPage() {
 
           {/* CATEGORIES */}
           <TabsContent value="categories">
-            <Card className="p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                <div>
-                  <h3 className="font-semibold">Categorías del club</h3>
-                  <p className="text-xs text-muted-foreground">Define los grupos por edad y su mensualidad</p>
-                </div>
-                <Button
-                  variant="outline"
-                  className="gap-2 w-full sm:w-auto"
-                  onClick={() => set("categories", [...s.categories, { id: crypto.randomUUID(), name: "Nueva categoría", ageRange: "", fee: 0 }])}
-                >
-                  <Plus className="w-4 h-4" /> Añadir categoría
-                </Button>
-              </div>
-              <div className="space-y-3">
-                {s.categories.map((c, i) => (
-                  <div key={c.id} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 sm:gap-3 sm:items-end p-3 rounded-lg border">
-                    <div>
-                      <Label className="text-xs">Nombre</Label>
-                      <Input value={c.name} onChange={(e) => {
-                        const next = [...s.categories]; next[i] = { ...c, name: e.target.value }; set("categories", next);
-                      }} />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Rango de edad</Label>
-                      <Input value={c.ageRange} placeholder="14-15 años" onChange={(e) => {
-                        const next = [...s.categories]; next[i] = { ...c, ageRange: e.target.value }; set("categories", next);
-                      }} />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Mensualidad</Label>
-                      <Input type="number" value={c.fee} onChange={(e) => {
-                        const next = [...s.categories]; next[i] = { ...c, fee: Number(e.target.value) }; set("categories", next);
-                      }} />
-                    </div>
-                    <Button
-                      variant="ghost" size="icon"
-                      className="text-destructive justify-self-end"
-                      onClick={() => set("categories", s.categories.filter((x) => x.id !== c.id))}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </Card>
+            <CategoriesPanel onNamesChange={setCategoryNames} />
           </TabsContent>
 
           {/* VENUES */}
