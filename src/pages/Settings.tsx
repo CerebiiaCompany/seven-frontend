@@ -16,10 +16,10 @@ import {
 } from "lucide-react";
 import { RegistrationsPanel } from "@/components/RegistrationsPanel";
 import { CategoriesPanel } from "@/components/CategoriesPanel";
+import { UsersPanel } from "@/components/UsersPanel";
 import api from "@/lib/api";
 
 type Venue = { id: string; name: string; address: string; type: string };
-type Member = { id: string; name: string; email: string; role: string };
 
 // Datos del club: persistidos en el backend (`/api/v1/club/settings/`),
 // nunca hardcodeados. El resto de esta pantalla (sedes, usuarios,
@@ -55,7 +55,6 @@ const EMPTY_CLUB: ClubData = {
 interface Extras {
   accent: string;
   venues: Venue[];
-  members: Member[];
   notifications: {
     attendance: boolean;
     payments: boolean;
@@ -70,11 +69,6 @@ const EXTRAS_DEFAULTS: Extras = {
     { id: "v1", name: "Cancha 1", address: "Sede Principal", type: "Grama sintética" },
     { id: "v2", name: "Cancha 2", address: "Sede Principal", type: "Grama natural" },
     { id: "v3", name: "Gimnasio", address: "Sede Principal", type: "Preparación física" },
-  ],
-  members: [
-    { id: "m1", name: "Laura Gómez", email: "laura@soccerfuture.com", role: "Admin del club" },
-    { id: "m2", name: "Carlos Mendoza", email: "carlos@soccerfuture.com", role: "Entrenador" },
-    { id: "m3", name: "Ana Restrepo", email: "ana@soccerfuture.com", role: "Entrenador" },
   ],
   notifications: { attendance: true, payments: true, matches: true, weeklyReport: false },
 };
@@ -332,57 +326,7 @@ export default function SettingsPage() {
 
           {/* TEAM */}
           <TabsContent value="team">
-            <Card className="p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                <div>
-                  <h3 className="font-semibold">Usuarios y roles</h3>
-                  <p className="text-xs text-muted-foreground">Quién puede acceder al panel y con qué permisos</p>
-                </div>
-                <Button
-                  variant="outline"
-                  className="gap-2 w-full sm:w-auto"
-                  onClick={() => setExtra("members", [...extras.members, { id: crypto.randomUUID(), name: "Nuevo usuario", email: "", role: "Entrenador" }])}
-                >
-                  <Plus className="w-4 h-4" /> Invitar usuario
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {extras.members.map((m, i) => (
-                  <div key={m.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
-                        {m.name.charAt(0)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{m.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{m.email || "sin email"}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Select value={m.role} onValueChange={(val) => {
-                        const next = [...extras.members]; next[i] = { ...m, role: val }; setExtra("members", next);
-                      }}>
-                        <SelectTrigger className="w-full sm:w-[170px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Admin del club">Admin del club</SelectItem>
-                          <SelectItem value="Entrenador">Entrenador</SelectItem>
-                          <SelectItem value="Administrativo">Administrativo</SelectItem>
-                          <SelectItem value="Acudiente">Acudiente</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button variant="ghost" size="icon" className="text-destructive"
-                        onClick={() => setExtra("members", extras.members.filter((x) => x.id !== m.id))}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground mt-4">
-                <Badge variant="outline" className="mr-2">Nota</Badge>
-                Los roles se aplicarán de forma real cuando se active el inicio de sesión del club.
-              </p>
-            </Card>
+            <UsersPanel />
           </TabsContent>
 
           {/* NOTIFICATIONS */}
