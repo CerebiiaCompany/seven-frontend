@@ -76,14 +76,22 @@ export default function CalendarPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState(false);
 
-  // Categorías con deportistas confirmados — la asistencia del evento solo
-  // tiene sentido para una categoría que ya tenga convocados reales.
-  useEffect(() => {
-    api
-      .get<string[]>("/players/categories/")
-      .then(({ data }) => setCategories(data))
-      .catch(() => { /* el select queda vacío si falla */ });
+  // Mismo catálogo que Configuración del club > Categorías (`/categories/`).
+  const loadCategories = useCallback(async () => {
+    setCategoriesLoading(true);
+    setCategoriesError(false);
+    try {
+      const { data } = await api.get<{ id: string; name: string }[]>("/categories/");
+      setCategories(data.map((c) => c.name));
+    } catch {
+      setCategoriesError(true);
+      toast.error("No se pudieron cargar las categorías");
+    } finally {
+      setCategoriesLoading(false);
+    }
   }, []);
 
   const today = new Date();
@@ -185,7 +193,14 @@ export default function CalendarPage() {
             <Button variant="outline" className="gap-2" asChild>
               <Link to="/attendance"><ClipboardCheck className="w-4 h-4" /> Asistencia</Link>
             </Button>
-            <Dialog open={createOpen} onOpenChange={(o) => { setCreateOpen(o); if (!o) setForm(emptyForm); }}>
+            <Dialog
+              open={createOpen}
+              onOpenChange={(o) => {
+                setCreateOpen(o);
+                if (o) loadCategories();
+                else setForm(emptyForm);
+              }}
+            >
               <DialogTrigger asChild>
                 <Button className="gap-2">
                   <Plus className="w-4 h-4" /> Nuevo evento
@@ -218,17 +233,32 @@ export default function CalendarPage() {
                   </div>
                   <div>
                     <Label>Categoría</Label>
-                    <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-                      <SelectTrigger><SelectValue placeholder="Selecciona una categoría" /></SelectTrigger>
+                    <Select
+                      value={form.category}
+                      onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
+                      disabled={categoriesLoading || categories.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={categoriesLoading ? "Cargando categorías..." : "Selecciona una categoría"}
+                        />
+                      </SelectTrigger>
                       <SelectContent>
                         {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    {categories.length === 0 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        No hay categorías con deportistas confirmados todavía.
+                    {categoriesError ? (
+                      <p className="text-xs text-destructive mt-1">
+                        No se pudieron cargar las categorías.{" "}
+                        <button type="button" className="underline" onClick={loadCategories}>
+                          Reintentar
+                        </button>
                       </p>
-                    )}
+                    ) : !categoriesLoading && categories.length === 0 ? (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        No hay categorías creadas. Crea una desde Configuración del club.
+                      </p>
+                    ) : null}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -248,7 +278,11 @@ export default function CalendarPage() {
                       onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
                     />
                   </div>
-                  <Button className="w-full" onClick={createEvent} disabled={saving || categories.length === 0}>
+                  <Button
+                    className="w-full"
+                    onClick={createEvent}
+                    disabled={saving || categoriesLoading || categories.length === 0}
+                  >
                     {saving ? "Creando..." : "Crear evento"}
                   </Button>
                 </div>
