@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, UserCog, Calendar, Trophy, CreditCard,
@@ -43,11 +43,24 @@ interface SidebarContentProps {
   onNavigate?: () => void;
 }
 
+// Each route mounts its own <DashboardLayout>/<AppSidebar>, so this nav element
+// is recreated on every navigation. Cache the scroll position at module scope
+// (survives remounts, resets only on a full page reload) so it can be restored
+// synchronously before paint.
+let cachedScrollTop = 0;
+
 export function SidebarNav({ collapsed = false, onNavigate }: SidebarContentProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
   const sections = filterNavSections(navSections, user);
+  const navRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    if (navRef.current) {
+      navRef.current.scrollTop = cachedScrollTop;
+    }
+  }, []);
 
   const go = (path: string) => {
     navigate(path);
@@ -56,7 +69,13 @@ export function SidebarNav({ collapsed = false, onNavigate }: SidebarContentProp
 
   return (
     <>
-      <nav className="sidebar-scroll flex-1 overflow-y-auto py-4 px-3 space-y-6">
+      <nav
+        ref={navRef}
+        onScroll={(e) => {
+          cachedScrollTop = e.currentTarget.scrollTop;
+        }}
+        className="sidebar-scroll flex-1 overflow-y-auto py-4 px-3 space-y-6"
+      >
         {sections.map((section) => (
           <div key={section.label}>
             {!collapsed && (
