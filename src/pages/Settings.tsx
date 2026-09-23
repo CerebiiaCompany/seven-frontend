@@ -12,18 +12,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import {
-  Building2, MapPin, Users, Bell, Shield, Plus, Trash2, Save, Upload, Palette, UserCheck,
+  Building2, MapPin, Users, Bell, Shield, Save, Upload, Palette, UserCheck,
 } from "lucide-react";
 import { RegistrationsPanel } from "@/components/RegistrationsPanel";
 import { CategoriesPanel } from "@/components/CategoriesPanel";
 import { UsersPanel } from "@/components/UsersPanel";
+import { VenuesPanel } from "@/components/VenuesPanel";
 import api from "@/lib/api";
 
-type Venue = { id: string; name: string; address: string; type: string };
-
 // Datos del club: persistidos en el backend (`/api/v1/club/settings/`),
-// nunca hardcodeados. El resto de esta pantalla (sedes, usuarios,
-// notificaciones, color) sigue siendo solo del navegador (localStorage).
+// nunca hardcodeados. Usuarios y sedes tienen su propio panel API-backed
+// (UsersPanel, VenuesPanel). Solo notificaciones y color siguen en
+// localStorage (fuera del alcance de estos cambios).
 interface ClubData {
   logo: string | null;
   name: string;
@@ -54,7 +54,6 @@ const EMPTY_CLUB: ClubData = {
 
 interface Extras {
   accent: string;
-  venues: Venue[];
   notifications: {
     attendance: boolean;
     payments: boolean;
@@ -65,11 +64,6 @@ interface Extras {
 
 const EXTRAS_DEFAULTS: Extras = {
   accent: "153 60% 38%",
-  venues: [
-    { id: "v1", name: "Cancha 1", address: "Sede Principal", type: "Grama sintética" },
-    { id: "v2", name: "Cancha 2", address: "Sede Principal", type: "Grama natural" },
-    { id: "v3", name: "Gimnasio", address: "Sede Principal", type: "Preparación física" },
-  ],
   notifications: { attendance: true, payments: true, matches: true, weeklyReport: false },
 };
 
@@ -278,50 +272,7 @@ export default function SettingsPage() {
 
           {/* VENUES */}
           <TabsContent value="venues">
-            <Card className="p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                <div>
-                  <h3 className="font-semibold">Sedes y escenarios</h3>
-                  <p className="text-xs text-muted-foreground">Lugares disponibles para entrenamientos y partidos</p>
-                </div>
-                <Button
-                  variant="outline"
-                  className="gap-2 w-full sm:w-auto"
-                  onClick={() => setExtra("venues", [...extras.venues, { id: crypto.randomUUID(), name: "Nueva sede", address: "", type: "Grama sintética" }])}
-                >
-                  <Plus className="w-4 h-4" /> Añadir sede
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {extras.venues.map((v, i) => (
-                  <div key={v.id} className="p-3 rounded-lg border space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <Input value={v.name} className="font-medium" onChange={(e) => {
-                        const next = [...extras.venues]; next[i] = { ...v, name: e.target.value }; setExtra("venues", next);
-                      }} />
-                      <Button variant="ghost" size="icon" className="text-destructive flex-shrink-0"
-                        onClick={() => setExtra("venues", extras.venues.filter((x) => x.id !== v.id))}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    <Input value={v.address} placeholder="Dirección" onChange={(e) => {
-                      const next = [...extras.venues]; next[i] = { ...v, address: e.target.value }; setExtra("venues", next);
-                    }} />
-                    <Select value={v.type} onValueChange={(val) => {
-                      const next = [...extras.venues]; next[i] = { ...v, type: val }; setExtra("venues", next);
-                    }}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Grama sintética">Grama sintética</SelectItem>
-                        <SelectItem value="Grama natural">Grama natural</SelectItem>
-                        <SelectItem value="Cancha cubierta">Cancha cubierta</SelectItem>
-                        <SelectItem value="Preparación física">Preparación física</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
-              </div>
-            </Card>
+            <VenuesPanel />
           </TabsContent>
 
           {/* TEAM */}
