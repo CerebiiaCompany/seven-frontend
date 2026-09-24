@@ -108,7 +108,7 @@ function SecurityPanel() {
             <Lock className="w-4 h-4" /> Cambiar contraseña
           </Button>
         </DialogTrigger>
-        <DialogContent className="w-[95vw] sm:w-full sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
+        <DialogContent className="themed-scroll w-[95vw] sm:w-full sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">

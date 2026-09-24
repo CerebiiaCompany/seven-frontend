@@ -74,7 +74,7 @@ export function SidebarNav({ collapsed = false, onNavigate }: SidebarContentProp
         onScroll={(e) => {
           cachedScrollTop = e.currentTarget.scrollTop;
         }}
-        className="sidebar-scroll flex-1 overflow-y-auto py-4 px-3 space-y-6"
+        className="themed-scroll flex-1 overflow-y-auto py-4 px-3 space-y-6"
       >
         {sections.map((section) => (
           <div key={section.label}>
