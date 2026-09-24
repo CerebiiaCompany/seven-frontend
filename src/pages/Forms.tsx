@@ -69,12 +69,16 @@ const Forms = () => {
   const [description, setDescription] = useState("Completa el formulario para registrarte en las pruebas.");
   const [fields, setFields] = useState<FormField[]>(defaultFields);
 
+  const fetchData = async () => {
+    const [formsData, subsData] = await Promise.all([listForms(), listSubmissions()]);
+    setForms(formsData);
+    setSubs(subsData);
+  };
+
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [formsData, subsData] = await Promise.all([listForms(), listSubmissions()]);
-      setForms(formsData);
-      setSubs(subsData);
+      await fetchData();
     } catch {
       toast({ title: "No se pudieron cargar los formularios", variant: "destructive" });
     } finally {
@@ -84,6 +88,26 @@ const Forms = () => {
 
   useEffect(() => {
     loadAll();
+  }, []);
+
+  // Las inscripciones las envían candidatos externos desde otra sesión, así que
+  // el estado local nunca se entera solo: refrescamos al volver a la pestaña y
+  // con un polling de respaldo para que aparezcan sin recargar la página.
+  useEffect(() => {
+    const silentRefresh = () => {
+      fetchData().catch(() => {});
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") silentRefresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", silentRefresh);
+    const interval = setInterval(silentRefresh, 15000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", silentRefresh);
+      clearInterval(interval);
+    };
   }, []);
 
   const filteredSubs = activeFormId === "all" ? subs : subs.filter((s) => s.form === activeFormId);
