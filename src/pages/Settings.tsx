@@ -13,12 +13,85 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import {
   Building2, MapPin, Users, Bell, Shield, Save, Upload, Palette, UserCheck,
+  Mail, Phone, User as UserIcon,
 } from "lucide-react";
 import { RegistrationsPanel } from "@/components/RegistrationsPanel";
 import { CategoriesPanel } from "@/components/CategoriesPanel";
 import { UsersPanel } from "@/components/UsersPanel";
 import { VenuesPanel } from "@/components/VenuesPanel";
 import api from "@/lib/api";
+import { useAuth, type AuthUser } from "@/contexts/AuthContext";
+
+const ROLE_LABELS: Record<AuthUser["role"], string> = {
+  player: "Jugador",
+  coach: "Entrenador",
+  parent: "Padre/Tutor",
+};
+
+/**
+ * Perfil de solo lectura para Padre/Jugador: en `/settings` solo ven sus
+ * propios datos, nunca la configuración administrativa del club (esa queda
+ * detrás de `IsCoachOrAdminRole` también en el backend — ocultar la pestaña
+ * aquí es una capa de UX, no la única barrera).
+ */
+function ProfileOnlySettings({ user }: { user: AuthUser }) {
+  const roleLabel = user.is_staff ? "Administrador" : ROLE_LABELS[user.role];
+  const initial = (user.full_name?.[0] || user.email[0]).toUpperCase();
+
+  return (
+    <DashboardLayout>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[700px] space-y-5">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold">Mi perfil</h1>
+          <p className="text-sm text-muted-foreground mt-1">Tu información personal</p>
+        </div>
+
+        <Card className="p-4 sm:p-6">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-display font-bold flex-shrink-0">
+              {initial}
+            </div>
+            <div>
+              <p className="font-semibold text-lg">{user.full_name}</p>
+              <Badge variant="secondary" className="text-[10px] mt-1">{roleLabel}</Badge>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 py-2 border-b border-border/50">
+              <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <div>
+                <p className="text-[11px] text-muted-foreground">Correo electrónico</p>
+                <p className="text-sm font-medium">{user.email}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 py-2 border-b border-border/50">
+              <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <div>
+                <p className="text-[11px] text-muted-foreground">Teléfono</p>
+                <p className="text-sm font-medium">{user.phone_number || "No registrado"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 py-2 border-b border-border/50">
+              <UserIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <div>
+                <p className="text-[11px] text-muted-foreground">Rol</p>
+                <p className="text-sm font-medium">{roleLabel}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 py-2">
+              <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <div>
+                <p className="text-[11px] text-muted-foreground">Club</p>
+                <p className="text-sm font-medium">{user.club_name}</p>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </DashboardLayout>
+  );
+}
 
 // Datos del club: persistidos en el backend (`/api/v1/club/settings/`),
 // nunca hardcodeados. Usuarios y sedes tienen su propio panel API-backed
@@ -77,7 +150,8 @@ const accents = [
   { label: "Rojo", value: "0 72% 51%" },
 ];
 
-export default function SettingsPage() {
+/** Configuración completa del club: solo para administradores/entrenadores. */
+function AdminClubSettings() {
   const [club, setClub] = useState<ClubData>(EMPTY_CLUB);
   const [clubLoading, setClubLoading] = useState(true);
   const [clubError, setClubError] = useState(false);
@@ -305,4 +379,19 @@ export default function SettingsPage() {
       </div>
     </DashboardLayout>
   );
+}
+
+/**
+ * Padre/Jugador → solo su perfil de solo lectura.
+ * Admin/entrenador → configuración completa del club, sin cambios.
+ */
+export default function SettingsPage() {
+  const { user } = useAuth();
+  if (!user) return null;
+
+  if (!user.is_staff && (user.role === "player" || user.role === "parent")) {
+    return <ProfileOnlySettings user={user} />;
+  }
+
+  return <AdminClubSettings />;
 }
