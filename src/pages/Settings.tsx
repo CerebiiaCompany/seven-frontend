@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import {
-  Building2, MapPin, Users, Bell, Shield, Save, Upload, Palette, UserCheck,
+  Building2, MapPin, Users, Bell, Shield, Save, Upload, UserCheck,
   Mail, Phone, User as UserIcon, Loader2, Lock, type LucideIcon,
 } from "lucide-react";
 import { RegistrationsPanel } from "@/components/RegistrationsPanel";
@@ -259,7 +259,6 @@ const EMPTY_CLUB: ClubData = {
 };
 
 interface Extras {
-  accent: string;
   notifications: {
     attendance: boolean;
     payments: boolean;
@@ -269,19 +268,10 @@ interface Extras {
 }
 
 const EXTRAS_DEFAULTS: Extras = {
-  accent: "153 60% 38%",
   notifications: { attendance: true, payments: true, matches: true, weeklyReport: false },
 };
 
 const STORAGE_KEY = "sf_club_settings";
-
-const accents = [
-  { label: "Esmeralda", value: "153 60% 38%" },
-  { label: "Azul", value: "213 80% 50%" },
-  { label: "Ámbar", value: "38 92% 50%" },
-  { label: "Violeta", value: "280 60% 55%" },
-  { label: "Rojo", value: "0 72% 51%" },
-];
 
 /** Configuración completa del club: solo para administradores/entrenadores. */
 function AdminClubSettings() {
@@ -444,27 +434,6 @@ function AdminClubSettings() {
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                </Card>
-
-                <Card className="p-4 sm:p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Palette className="w-4 h-4 text-primary" />
-                    <h3 className="font-semibold">Color del club</h3>
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    {accents.map((a) => (
-                      <button
-                        key={a.value}
-                        onClick={() => setExtra("accent", a.value)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${
-                          extras.accent === a.value ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
-                        }`}
-                      >
-                        <span className="w-4 h-4 rounded-full" style={{ background: `hsl(${a.value})` }} />
-                        {a.label}
-                      </button>
-                    ))}
                   </div>
                 </Card>
               </>
