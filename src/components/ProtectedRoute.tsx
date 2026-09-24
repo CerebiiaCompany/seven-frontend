@@ -25,6 +25,14 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
+  // Contraseña temporal aún no cambiada: bloquea toda ruta protegida hasta
+  // que complete el cambio en /change-password. El estado vive en la base de
+  // datos (`must_change_password`), no en el frontend, así que persiste
+  // entre sesiones y recargas de página.
+  if (user.must_change_password) {
+    return <Navigate to="/change-password" replace />;
+  }
+
   if (!canAccessPath(user, location.pathname)) {
     return <Navigate to={homePathFor(user)} replace />;
   }

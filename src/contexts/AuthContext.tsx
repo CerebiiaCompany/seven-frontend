@@ -11,6 +11,7 @@ export type AuthUser = {
   role: "player" | "coach" | "parent";
   is_staff: boolean;
   is_verified: boolean;
+  must_change_password: boolean;
   created_at: string;
 };
 
