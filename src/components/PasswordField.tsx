@@ -21,7 +21,7 @@ export function PasswordField({
         <LockKeyhole className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           id={id}
-          className="h-11 px-10"
+          className="h-11 px-10 transition-shadow"
           type={show ? "text" : "password"}
           value={value}
           onChange={(event) => onChange(event.target.value)}

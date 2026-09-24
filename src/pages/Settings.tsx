@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { isAxiosError } from "axios";
+import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import {
   Building2, MapPin, Users, Bell, Shield, Save, Upload, Palette, UserCheck,
-  Mail, Phone, User as UserIcon, Loader2,
+  Mail, Phone, User as UserIcon, Loader2, type LucideIcon,
 } from "lucide-react";
 import { RegistrationsPanel } from "@/components/RegistrationsPanel";
 import { CategoriesPanel } from "@/components/CategoriesPanel";
@@ -76,13 +77,13 @@ function SecurityPanel() {
   };
 
   return (
-    <Card className="p-4 sm:p-6">
+    <Card className="p-5 sm:p-6 max-w-lg transition-shadow hover:shadow-md">
       <div className="flex items-center gap-2 mb-1">
         <Shield className="w-4 h-4 text-primary" />
         <h3 className="font-semibold">Seguridad</h3>
       </div>
       <p className="text-xs text-muted-foreground mb-4">Cambia tu contraseña cuando lo necesites.</p>
-      <form className="space-y-4 max-w-sm" onSubmit={submit}>
+      <form className="space-y-3.5" onSubmit={submit}>
         <PasswordField
           id="current-password"
           label="Contraseña actual"
@@ -111,12 +112,24 @@ function SecurityPanel() {
           autoComplete="new-password"
         />
         <PasswordRequirementsChecklist newPassword={newPassword} confirmPassword={confirmPassword} />
-        <Button type="submit" className="gap-2" disabled={!canSubmit}>
+        <Button type="submit" className="h-11 w-full sm:w-auto gap-2" disabled={!canSubmit}>
           {saving && <Loader2 className="w-4 h-4 animate-spin" />}
           Actualizar contraseña
         </Button>
       </form>
     </Card>
+  );
+}
+
+function ProfileField({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3 min-w-0">
+      <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+      <div className="min-w-0">
+        <p className="text-[11px] text-muted-foreground">{label}</p>
+        <p className="text-sm font-medium truncate" title={value}>{value}</p>
+      </div>
+    </div>
   );
 }
 
@@ -132,56 +145,36 @@ function ProfileOnlySettings({ user }: { user: AuthUser }) {
 
   return (
     <DashboardLayout>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-[700px] space-y-5">
+      <div className="w-full max-w-[960px] mx-auto p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 overflow-x-hidden">
         <div>
           <h1 className="text-2xl sm:text-3xl font-display font-bold">Mi perfil</h1>
           <p className="text-sm text-muted-foreground mt-1">Tu información personal</p>
         </div>
 
-        <Card className="p-4 sm:p-6">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-display font-bold flex-shrink-0">
-              {initial}
-            </div>
-            <div>
-              <p className="font-semibold text-lg">{user.full_name}</p>
-              <Badge variant="secondary" className="text-[10px] mt-1">{roleLabel}</Badge>
-            </div>
-          </div>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
+          <Card className="p-5 sm:p-6 transition-shadow hover:shadow-md">
+            <div className="flex flex-col sm:flex-row gap-5 sm:gap-6">
+              <div className="flex sm:flex-col items-center gap-3 sm:gap-2 sm:w-28 flex-shrink-0">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-display font-bold flex-shrink-0">
+                  {initial}
+                </div>
+                <Badge variant="secondary" className="text-[10px]">{roleLabel}</Badge>
+              </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 py-2 border-b border-border/50">
-              <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <div>
-                <p className="text-[11px] text-muted-foreground">Correo electrónico</p>
-                <p className="text-sm font-medium">{user.email}</p>
+              <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                <ProfileField icon={UserIcon} label="Nombre" value={user.full_name} />
+                <ProfileField icon={Mail} label="Correo electrónico" value={user.email} />
+                <ProfileField icon={Phone} label="Teléfono" value={user.phone_number || "No registrado"} />
+                <ProfileField icon={Shield} label="Rol" value={roleLabel} />
+                <ProfileField icon={Building2} label="Club" value={user.club_name} />
               </div>
             </div>
-            <div className="flex items-center gap-3 py-2 border-b border-border/50">
-              <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <div>
-                <p className="text-[11px] text-muted-foreground">Teléfono</p>
-                <p className="text-sm font-medium">{user.phone_number || "No registrado"}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 py-2 border-b border-border/50">
-              <UserIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <div>
-                <p className="text-[11px] text-muted-foreground">Rol</p>
-                <p className="text-sm font-medium">{roleLabel}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 py-2">
-              <Building2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <div>
-                <p className="text-[11px] text-muted-foreground">Club</p>
-                <p className="text-sm font-medium">{user.club_name}</p>
-              </div>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </motion.div>
 
-        <SecurityPanel />
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: 0.05 }}>
+          <SecurityPanel />
+        </motion.div>
       </div>
     </DashboardLayout>
   );
