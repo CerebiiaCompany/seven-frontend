@@ -11,10 +11,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import {
   Building2, MapPin, Users, Bell, Shield, Save, Upload, Palette, UserCheck,
-  Mail, Phone, User as UserIcon, Loader2, type LucideIcon,
+  Mail, Phone, User as UserIcon, Loader2, Lock, type LucideIcon,
 } from "lucide-react";
 import { RegistrationsPanel } from "@/components/RegistrationsPanel";
 import { CategoriesPanel } from "@/components/CategoriesPanel";
@@ -40,6 +43,7 @@ const ROLE_LABELS: Record<AuthUser["role"], string> = {
  * antes de renderizar la página).
  */
 function SecurityPanel() {
+  const [open, setOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -50,6 +54,20 @@ function SecurityPanel() {
 
   const { allRequirementsMet, passwordsMatch } = evaluatePassword(newPassword, confirmPassword);
   const canSubmit = currentPassword.length > 0 && allRequirementsMet && passwordsMatch && !saving;
+
+  const resetForm = () => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowCurrent(false);
+    setShowNew(false);
+    setShowConfirm(false);
+  };
+
+  const closeAndReset = () => {
+    setOpen(false);
+    resetForm();
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -63,9 +81,7 @@ function SecurityPanel() {
         new_password_confirm: confirmPassword,
       });
       toast({ title: "Contraseña actualizada correctamente." });
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      closeAndReset();
     } catch (error) {
       const detail = isAxiosError(error)
         ? (error.response?.data as { error?: { message?: string } } | undefined)?.error?.message
@@ -77,46 +93,76 @@ function SecurityPanel() {
   };
 
   return (
-    <Card className="p-5 sm:p-6 max-w-lg transition-shadow hover:shadow-md">
+    <Card className="p-5 sm:p-6 transition-shadow hover:shadow-md">
       <div className="flex items-center gap-2 mb-1">
         <Shield className="w-4 h-4 text-primary" />
         <h3 className="font-semibold">Seguridad</h3>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">Cambia tu contraseña cuando lo necesites.</p>
-      <form className="space-y-3.5" onSubmit={submit}>
-        <PasswordField
-          id="current-password"
-          label="Contraseña actual"
-          value={currentPassword}
-          onChange={setCurrentPassword}
-          show={showCurrent}
-          onToggleShow={() => setShowCurrent((v) => !v)}
-          autoComplete="current-password"
-        />
-        <PasswordField
-          id="new-password"
-          label="Nueva contraseña"
-          value={newPassword}
-          onChange={setNewPassword}
-          show={showNew}
-          onToggleShow={() => setShowNew((v) => !v)}
-          autoComplete="new-password"
-        />
-        <PasswordField
-          id="confirm-password"
-          label="Confirmar nueva contraseña"
-          value={confirmPassword}
-          onChange={setConfirmPassword}
-          show={showConfirm}
-          onToggleShow={() => setShowConfirm((v) => !v)}
-          autoComplete="new-password"
-        />
-        <PasswordRequirementsChecklist newPassword={newPassword} confirmPassword={confirmPassword} />
-        <Button type="submit" className="h-11 w-full sm:w-auto gap-2" disabled={!canSubmit}>
-          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-          Actualizar contraseña
-        </Button>
-      </form>
+      <p className="text-xs text-muted-foreground mb-4">
+        Mantén tu cuenta protegida actualizando tu contraseña cuando lo necesites.
+      </p>
+
+      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : closeAndReset())}>
+        <DialogTrigger asChild>
+          <Button className="gap-2 w-full sm:w-auto">
+            <Lock className="w-4 h-4" /> Cambiar contraseña
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="w-[95vw] sm:w-full sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                <Lock className="w-4 h-4" />
+              </div>
+              <DialogTitle>Cambiar contraseña</DialogTitle>
+            </div>
+            <DialogDescription>
+              Introduce tu contraseña actual y crea una nueva contraseña segura.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form className="space-y-3.5" onSubmit={submit}>
+            <PasswordField
+              id="modal-current-password"
+              label="Contraseña actual"
+              value={currentPassword}
+              onChange={setCurrentPassword}
+              show={showCurrent}
+              onToggleShow={() => setShowCurrent((v) => !v)}
+              autoComplete="current-password"
+            />
+            <PasswordField
+              id="modal-new-password"
+              label="Nueva contraseña"
+              value={newPassword}
+              onChange={setNewPassword}
+              show={showNew}
+              onToggleShow={() => setShowNew((v) => !v)}
+              autoComplete="new-password"
+            />
+            <PasswordField
+              id="modal-confirm-password"
+              label="Confirmar nueva contraseña"
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              show={showConfirm}
+              onToggleShow={() => setShowConfirm((v) => !v)}
+              autoComplete="new-password"
+            />
+            <PasswordRequirementsChecklist newPassword={newPassword} confirmPassword={confirmPassword} />
+
+            <DialogFooter className="pt-2 gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={closeAndReset} disabled={saving}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="gap-2" disabled={!canSubmit}>
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Actualizar contraseña
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
