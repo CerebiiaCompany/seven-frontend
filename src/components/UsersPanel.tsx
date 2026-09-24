@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Trash2 } from "lucide-react";
+import { Copy, Plus, Trash2 } from "lucide-react";
 
 interface AdminUser {
   id: string;
@@ -25,6 +25,12 @@ interface AdminUser {
 interface RoleOption {
   value: string;
   label: string;
+}
+
+interface NewUserCredentials {
+  fullName: string;
+  email: string;
+  password: string;
 }
 
 const emptyInvite = { first_name: "", last_name: "", email: "", phone_number: "", role: "" };
@@ -49,6 +55,7 @@ export function UsersPanel() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState(emptyInvite);
   const [inviting, setInviting] = useState(false);
+  const [credentials, setCredentials] = useState<NewUserCredentials | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,12 +134,10 @@ export function UsersPanel() {
         },
         ...prev,
       ]);
-      toast({
-        title: "Usuario invitado",
-        description: `Contraseña temporal para ${data.email}: ${password} (compártela y pide que la cambie al ingresar).`,
-      });
+      toast({ title: "Usuario creado correctamente." });
       setInviteOpen(false);
       setInviteForm(emptyInvite);
+      setCredentials({ fullName: data.full_name || `${first_name} ${last_name}`.trim(), email: data.email, password });
     } catch (error) {
       const detail = isAxiosError(error)
         ? Object.values(error.response?.data?.error?.details ?? {})[0]?.[0]
@@ -141,6 +146,19 @@ export function UsersPanel() {
     } finally {
       setInviting(false);
     }
+  };
+
+  const copyCredentials = async () => {
+    if (!credentials) return;
+    const text = `Bienvenido a Soccer Future.\n\nCorreo: ${credentials.email}\nContraseña temporal: ${credentials.password}\n\nInicia sesión y cambia tu contraseña cuando ingreses por primera vez.`;
+    await navigator.clipboard.writeText(text);
+    toast({ title: "Credenciales copiadas." });
+  };
+
+  const copyPasswordOnly = async () => {
+    if (!credentials) return;
+    await navigator.clipboard.writeText(credentials.password);
+    toast({ title: "Contraseña copiada." });
   };
 
   if (denied) {
@@ -204,6 +222,42 @@ export function UsersPanel() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <Dialog open={!!credentials} onOpenChange={(o) => { if (!o) setCredentials(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Usuario creado correctamente</DialogTitle>
+            <DialogDescription>Comparte estas credenciales con el usuario para que pueda iniciar sesión.</DialogDescription>
+          </DialogHeader>
+          {credentials && (
+            <div className="space-y-4 pt-1">
+              <div>
+                <Label>Nombre</Label>
+                <p className="text-sm font-medium">{credentials.fullName}</p>
+              </div>
+              <div>
+                <Label>Correo electrónico</Label>
+                <p className="text-sm font-medium">{credentials.email}</p>
+              </div>
+              <div>
+                <Label>Contraseña temporal</Label>
+                <Input readOnly value={credentials.password} onFocus={(e) => e.target.select()} />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button className="flex-1 gap-2" onClick={copyCredentials}>
+                  <Copy className="w-4 h-4" /> Copiar credenciales
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={copyPasswordOnly}>
+                  Copiar solo contraseña
+                </Button>
+              </div>
+              <Button variant="ghost" className="w-full" onClick={() => setCredentials(null)}>
+                Cerrar
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {loading ? (
         <p className="text-sm text-muted-foreground py-6 text-center">Cargando usuarios...</p>
