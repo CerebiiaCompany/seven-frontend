@@ -15,6 +15,11 @@ import { playerPositions } from "@/pages/Players";
 
 type RegistrationStatus = "pending" | "confirmed" | "rejected";
 
+interface NamedRef {
+  id: string;
+  name: string;
+}
+
 interface Registration {
   id: string;
   full_name: string;
@@ -24,7 +29,8 @@ interface Registration {
   document_id: string;
   birth_date: string;
   position: string;
-  category: string;
+  category: NamedRef | null;
+  group: NamedRef | null;
   guardian_name: string;
   guardian_phone: string;
   guardian_email: string;
@@ -32,6 +38,12 @@ interface Registration {
   status: RegistrationStatus;
   review_note: string;
   created_at: string;
+}
+
+interface CategoryOption {
+  id: string;
+  name: string;
+  groups: NamedRef[];
 }
 
 const STATUS_META: Record<RegistrationStatus, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
@@ -55,15 +67,20 @@ const ageFrom = (birth: string | null) => {
   return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25)));
 };
 
-export function RegistrationsPanel({ categories }: { categories: string[] }) {
+export function RegistrationsPanel() {
   const [rows, setRows] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
   const [filter, setFilter] = useState<RegistrationStatus | "all">("pending");
   const [search, setSearch] = useState("");
+
   const [confirming, setConfirming] = useState<Registration | null>(null);
-  const [form, setForm] = useState({ category: "", position: "Mediocampista", note: "" });
+  const [form, setForm] = useState({ categoryId: "", groupId: "", position: "Mediocampista", note: "" });
   const [saving, setSaving] = useState(false);
+
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,6 +100,19 @@ export function RegistrationsPanel({ categories }: { categories: string[] }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadCategories = useCallback(async () => {
+    setCategoriesLoading(true);
+    setCategoriesError(false);
+    try {
+      const { data } = await api.get<CategoryOption[]>("/categories/");
+      setCategories(data);
+    } catch {
+      setCategoriesError(true);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  }, []);
 
   const filtered = useMemo(
     () =>
@@ -111,19 +141,30 @@ export function RegistrationsPanel({ categories }: { categories: string[] }) {
   };
 
   const openConfirm = (row: Registration) => {
-    setForm({ category: categories[0] || "", position: "Mediocampista", note: "" });
+    setForm({ categoryId: "", groupId: "", position: "Mediocampista", note: "" });
     setConfirming(row);
+    loadCategories();
   };
+
+  const selectedCategory = useMemo(
+    () => categories.find((c) => c.id === form.categoryId) ?? null,
+    [categories, form.categoryId]
+  );
 
   const confirmRegistration = async () => {
     if (!confirming) return;
-    if (!form.category) { toast({ title: "Selecciona una categoría", variant: "destructive" }); return; }
+    if (!form.categoryId) { toast({ title: "Selecciona una categoría", variant: "destructive" }); return; }
+    if (selectedCategory && selectedCategory.groups.length > 0 && !form.groupId) {
+      toast({ title: "Selecciona un grupo", variant: "destructive" });
+      return;
+    }
     if (!form.position) { toast({ title: "Selecciona una posición inicial", variant: "destructive" }); return; }
 
     setSaving(true);
     try {
       const { data } = await api.post<Registration>(`/players/${confirming.id}/confirm/`, {
-        category: form.category,
+        category_id: form.categoryId,
+        group_id: form.groupId || null,
         position: form.position,
         review_note: form.note,
       });
@@ -131,7 +172,13 @@ export function RegistrationsPanel({ categories }: { categories: string[] }) {
       toast({ title: "Deportista confirmado", description: `${confirming.full_name} ya está habilitado como jugador activo.` });
       setConfirming(null);
     } catch (error) {
-      toast({ title: "No se pudo confirmar", variant: "destructive" });
+      const detail = isAxiosError(error)
+        ? Object.values(error.response?.data ?? {})[0]
+        : null;
+      toast({
+        title: typeof detail === "string" ? detail : Array.isArray(detail) ? String(detail[0]) : "No se pudo confirmar",
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
@@ -223,7 +270,9 @@ export function RegistrationsPanel({ categories }: { categories: string[] }) {
                       </p>
                       {r.status === "confirmed" && (
                         <p className="text-xs text-primary mt-1">
-                          {r.category || "Sin categoría"}{r.position ? ` · ${r.position}` : ""}
+                          {r.category?.name || "Sin categoría"}
+                          {r.group ? ` ${r.group.name}` : ""}
+                          {r.position ? ` · ${r.position}` : ""}
                         </p>
                       )}
                       {r.status === "rejected" && r.review_note && (
@@ -255,19 +304,60 @@ export function RegistrationsPanel({ categories }: { categories: string[] }) {
           <DialogHeader>
             <DialogTitle>Confirmar deportista</DialogTitle>
             <DialogDescription>
-              Asigna la categoría y la posición inicial de {confirming?.full_name}. Pasará de pendiente a confirmado y quedará habilitado como jugador activo.
+              Asigna la categoría, el grupo y la posición inicial de {confirming?.full_name}. Pasará de pendiente a confirmado y quedará habilitado como jugador activo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-1">
             <div>
               <Label>Categoría</Label>
-              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecciona una categoría" /></SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {categoriesError ? (
+                <div className="flex items-center justify-between gap-3 mt-1.5">
+                  <p className="text-xs text-destructive">No se pudieron cargar las categorías.</p>
+                  <Button size="sm" variant="outline" onClick={loadCategories}>Reintentar</Button>
+                </div>
+              ) : (
+                <Select
+                  value={form.categoryId}
+                  onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v, groupId: "" }))}
+                  disabled={categoriesLoading || categories.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        categoriesLoading
+                          ? "Cargando categorías..."
+                          : categories.length === 0
+                          ? "No hay categorías creadas"
+                          : "Selecciona una categoría"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
+
+            <div>
+              <Label>Grupo</Label>
+              {!selectedCategory ? (
+                <Select disabled value="">
+                  <SelectTrigger><SelectValue placeholder="Selecciona primero una categoría" /></SelectTrigger>
+                  <SelectContent />
+                </Select>
+              ) : selectedCategory.groups.length === 0 ? (
+                <p className="text-xs text-muted-foreground mt-1.5">Esta categoría no tiene grupos creados.</p>
+              ) : (
+                <Select value={form.groupId} onValueChange={(v) => setForm((f) => ({ ...f, groupId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecciona un grupo" /></SelectTrigger>
+                  <SelectContent>
+                    {selectedCategory.groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
             <div>
               <Label>Posición inicial</Label>
               <Select value={form.position} onValueChange={(v) => setForm((f) => ({ ...f, position: v }))}>

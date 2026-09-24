@@ -27,7 +27,7 @@ interface CategoryRow {
  * Cada categoría puede dividirse en grupos (A, B, C, ...) cuando tiene más
  * deportistas de los que caben en un solo equipo/horario.
  */
-export function CategoriesPanel({ onNamesChange }: { onNamesChange?: (names: string[]) => void }) {
+export function CategoriesPanel() {
   const [rows, setRows] = useState<CategoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
@@ -39,7 +39,6 @@ export function CategoriesPanel({ onNamesChange }: { onNamesChange?: (names: str
       const { data } = await api.get<CategoryRow[]>("/categories/");
       setDenied(false);
       setRows(data);
-      onNamesChange?.(data.map((c) => c.name));
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 403) {
         setDenied(true);
@@ -49,7 +48,7 @@ export function CategoriesPanel({ onNamesChange }: { onNamesChange?: (names: str
     } finally {
       setLoading(false);
     }
-  }, [onNamesChange]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -67,11 +66,7 @@ export function CategoriesPanel({ onNamesChange }: { onNamesChange?: (names: str
     };
     try {
       const { data } = await api.put<CategoryRow>(`/categories/${id}/`, payload);
-      setRows((prev) => {
-        const next = prev.map((r) => (r.id === id ? data : r));
-        onNamesChange?.(next.map((c) => c.name));
-        return next;
-      });
+      setRows((prev) => prev.map((r) => (r.id === id ? data : r)));
     } catch (error) {
       const detail = isAxiosError(error) ? error.response?.data?.name?.[0] : null;
       toast({ title: detail || "No se pudo guardar la categoría", variant: "destructive" });
@@ -88,11 +83,7 @@ export function CategoriesPanel({ onNamesChange }: { onNamesChange?: (names: str
       const { data } = await api.post<CategoryRow>("/categories/", {
         name: "Nueva categoría", age_range: "", fee: 0, groups: [],
       });
-      setRows((prev) => {
-        const next = [...prev, data];
-        onNamesChange?.(next.map((c) => c.name));
-        return next;
-      });
+      setRows((prev) => [...prev, data]);
     } catch (error) {
       toast({ title: "No se pudo crear la categoría", variant: "destructive" });
     }
@@ -101,11 +92,7 @@ export function CategoriesPanel({ onNamesChange }: { onNamesChange?: (names: str
   const deleteCategory = async (id: string) => {
     try {
       await api.delete(`/categories/${id}/`);
-      setRows((prev) => {
-        const next = prev.filter((r) => r.id !== id);
-        onNamesChange?.(next.map((c) => c.name));
-        return next;
-      });
+      setRows((prev) => prev.filter((r) => r.id !== id));
     } catch (error) {
       toast({ title: "No se pudo eliminar la categoría", variant: "destructive" });
     }

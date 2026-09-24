@@ -16,7 +16,7 @@ import { toast } from "@/hooks/use-toast";
 type PlayerVideo = { id: string; name: string; url: string; createdAt: string };
 
 const playerData = {
-  id: 1, name: "Juan Pérez", age: 16, category: "Sub-17", position: "Delantero",
+  id: 1, name: "Juan Pérez", age: 16, category: "Sub-17", group: "", position: "Delantero",
   rating: 82, status: "active", goals: 12, assists: 8, minutes: 1240,
   birthdate: "2010-03-15", city: "Bogotá",
   observations: [
@@ -101,7 +101,9 @@ const PlayerProfile = () => {
               <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mt-2">
                 <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {player.age} años</span>
                 <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {player.city}</span>
-                <span className="flex items-center gap-1"><Award className="w-3.5 h-3.5" /> {player.category} — {player.position}</span>
+                <span className="flex items-center gap-1">
+                  <Award className="w-3.5 h-3.5" /> {player.category}{player.group ? ` ${player.group}` : ""} — {player.position}
+                </span>
               </div>
             </div>
             <div className="text-center px-4">

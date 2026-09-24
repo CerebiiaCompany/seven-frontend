@@ -28,6 +28,7 @@ export interface Player {
   name: string;
   age: number;
   category: string;
+  group: string;
   position: string;
   rating: number;
   status: string;
@@ -49,7 +50,8 @@ interface ApiPlayer {
   city: string;
   guardian_name: string;
   status: "pending" | "confirmed" | "rejected";
-  category: string;
+  category: { id: string; name: string } | null;
+  group: { id: string; name: string } | null;
   position: string;
   created_at: string;
 }
@@ -90,7 +92,8 @@ const mapApiPlayer = (r: ApiPlayer): Player => ({
   id: r.id,
   name: r.full_name || "Sin nombre",
   age: ageFrom(r.birth_date) ?? 0,
-  category: r.category || "Sin categoría",
+  category: r.category?.name || "Sin categoría",
+  group: r.group?.name || "",
   position: r.position || "Sin posición",
   rating: 0,
   status: r.status,
@@ -252,7 +255,9 @@ const Players = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3.5 text-sm text-foreground">{player.category}</td>
+                      <td className="px-5 py-3.5 text-sm text-foreground">
+                        {player.category}{player.group ? ` ${player.group}` : ""}
+                      </td>
                       <td className="px-5 py-3.5 text-sm text-foreground">{player.position}</td>
                       <td className="px-5 py-3.5 text-sm text-muted-foreground">
                         <p>{player.email || "—"}</p>

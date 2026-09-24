@@ -83,7 +83,6 @@ export default function SettingsPage() {
   const [clubError, setClubError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [extras, setExtras] = useState<Extras>(EXTRAS_DEFAULTS);
-  const [categoryNames, setCategoryNames] = useState<string[]>([]);
 
   const loadClub = useCallback(async () => {
     setClubLoading(true);
@@ -171,7 +170,7 @@ export default function SettingsPage() {
 
           {/* DEPORTISTAS REGISTRADOS */}
           <TabsContent value="athletes" className="space-y-4">
-            <RegistrationsPanel categories={categoryNames} />
+            <RegistrationsPanel />
           </TabsContent>
 
           {/* CLUB */}
@@ -267,7 +266,7 @@ export default function SettingsPage() {
 
           {/* CATEGORIES */}
           <TabsContent value="categories">
-            <CategoriesPanel onNamesChange={setCategoryNames} />
+            <CategoriesPanel />
           </TabsContent>
 
           {/* VENUES */}

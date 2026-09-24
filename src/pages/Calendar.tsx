@@ -31,6 +31,7 @@ interface EventItem {
   location: string;
   coach: string;
   category?: string;
+  group?: string;
   notes?: string;
 }
 
@@ -40,10 +41,22 @@ interface ApiTrainingSession {
   event_type: string;
   scheduled_at: string;
   location: string;
-  category: string;
+  category: string | null;
+  group: string | null;
   coach_name: string | null;
   status: string;
   notes: string;
+}
+
+interface NamedRef {
+  id: string;
+  name: string;
+}
+
+interface CategoryOption {
+  id: string;
+  name: string;
+  groups: NamedRef[];
 }
 
 const mapEvent = (r: ApiTrainingSession): EventItem => {
@@ -57,13 +70,14 @@ const mapEvent = (r: ApiTrainingSession): EventItem => {
     location: r.location || "Sin ubicación",
     coach: r.coach_name || "Sin asignar",
     category: r.category || undefined,
+    group: r.group || undefined,
     notes: r.notes || undefined,
   };
 };
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-const emptyForm = { type: "training", title: "", date: "", time: "", location: "", category: "" };
+const emptyForm = { type: "training", title: "", date: "", time: "", location: "", categoryId: "", groupId: "" };
 
 export default function CalendarPage() {
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()));
@@ -75,17 +89,17 @@ export default function CalendarPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [categoriesError, setCategoriesError] = useState(false);
 
-  // Mismo catálogo que Configuración del club > Categorías (`/categories/`).
+  // Mismo catálogo (con sus grupos) que Configuración del club > Categorías (`/categories/`).
   const loadCategories = useCallback(async () => {
     setCategoriesLoading(true);
     setCategoriesError(false);
     try {
-      const { data } = await api.get<{ id: string; name: string }[]>("/categories/");
-      setCategories(data.map((c) => c.name));
+      const { data } = await api.get<CategoryOption[]>("/categories/");
+      setCategories(data);
     } catch {
       setCategoriesError(true);
       toast.error("No se pudieron cargar las categorías");
@@ -93,6 +107,11 @@ export default function CalendarPage() {
       setCategoriesLoading(false);
     }
   }, []);
+
+  const selectedCategory = useMemo(
+    () => categories.find((c) => c.id === form.categoryId) ?? null,
+    [categories, form.categoryId]
+  );
 
   const today = new Date();
   const daysInMonth = getDaysInMonth(monthDate);
@@ -140,8 +159,12 @@ export default function CalendarPage() {
       toast.error("Completa título, fecha y hora");
       return;
     }
-    if (!form.category) {
+    if (!form.categoryId) {
       toast.error("Selecciona la categoría del evento");
+      return;
+    }
+    if (selectedCategory && selectedCategory.groups.length > 0 && !form.groupId) {
+      toast.error("Selecciona el grupo del evento");
       return;
     }
     setSaving(true);
@@ -152,7 +175,8 @@ export default function CalendarPage() {
         event_type: form.type,
         scheduled_at: scheduledAt,
         location: form.location.trim(),
-        category: form.category,
+        category_id: form.categoryId,
+        group_id: form.groupId || null,
       });
       const created = mapEvent(data);
       const createdMonth = parseISO(data.scheduled_at);
@@ -234,8 +258,8 @@ export default function CalendarPage() {
                   <div>
                     <Label>Categoría</Label>
                     <Select
-                      value={form.category}
-                      onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
+                      value={form.categoryId}
+                      onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v, groupId: "" }))}
                       disabled={categoriesLoading || categories.length === 0}
                     >
                       <SelectTrigger>
@@ -244,7 +268,7 @@ export default function CalendarPage() {
                         />
                       </SelectTrigger>
                       <SelectContent>
-                        {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     {categoriesError ? (
@@ -259,6 +283,24 @@ export default function CalendarPage() {
                         No hay categorías creadas. Crea una desde Configuración del club.
                       </p>
                     ) : null}
+                  </div>
+                  <div>
+                    <Label>Grupo</Label>
+                    {!selectedCategory ? (
+                      <Select disabled value="">
+                        <SelectTrigger><SelectValue placeholder="Selecciona primero una categoría" /></SelectTrigger>
+                        <SelectContent />
+                      </Select>
+                    ) : selectedCategory.groups.length === 0 ? (
+                      <p className="text-xs text-muted-foreground mt-1.5">Esta categoría no tiene grupos creados.</p>
+                    ) : (
+                      <Select value={form.groupId} onValueChange={(v) => setForm((f) => ({ ...f, groupId: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Selecciona un grupo" /></SelectTrigger>
+                        <SelectContent>
+                          {selectedCategory.groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -438,7 +480,10 @@ export default function CalendarPage() {
                   </div>
                   <div className="text-left">
                     <DialogTitle>{selected.title}</DialogTitle>
-                    <DialogDescription>{selected.type === "match" ? "Partido" : "Entrenamiento"} · {selected.category}</DialogDescription>
+                    <DialogDescription>
+                      {selected.type === "match" ? "Partido" : "Entrenamiento"} · {selected.category}
+                      {selected.group ? ` ${selected.group}` : ""}
+                    </DialogDescription>
                   </div>
                 </div>
               </DialogHeader>

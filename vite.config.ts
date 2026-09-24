@@ -11,6 +11,13 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+    watch: {
+      // Docker Desktop en Windows no siempre propaga eventos inotify desde
+      // el bind mount del host; sin polling, Vite puede quedarse sirviendo
+      // versiones viejas de los archivos aunque se editen en el host.
+      usePolling: true,
+      interval: 300,
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
