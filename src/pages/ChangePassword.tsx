@@ -2,12 +2,11 @@ import { FormEvent, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { toast } from "sonner";
-import {
-  CheckCircle2, Circle, Eye, EyeOff, LoaderCircle, LockKeyhole, LogOut, Zap,
-} from "lucide-react";
+import { LoaderCircle, LogOut, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PasswordField } from "@/components/PasswordField";
+import { PasswordRequirementsChecklist } from "@/components/PasswordRequirementsChecklist";
+import { evaluatePassword } from "@/lib/passwordRequirements";
 import api from "@/lib/api";
 import { useAuth, type AuthUser } from "@/contexts/AuthContext";
 
@@ -17,54 +16,6 @@ function extractErrorMessage(error: unknown, fallback: string): string {
     if (data?.error?.message) return data.error.message;
   }
   return fallback;
-}
-
-const REQUIREMENTS: { key: string; label: string; test: (pw: string) => boolean }[] = [
-  { key: "length", label: "Mínimo 8 caracteres", test: (pw) => pw.length >= 8 },
-  { key: "upper", label: "Una letra mayúscula", test: (pw) => /[A-Z]/.test(pw) },
-  { key: "lower", label: "Una letra minúscula", test: (pw) => /[a-z]/.test(pw) },
-  { key: "number", label: "Un número", test: (pw) => /[0-9]/.test(pw) },
-  { key: "special", label: "Un carácter especial", test: (pw) => /[^A-Za-z0-9]/.test(pw) },
-];
-
-function PasswordField({
-  id, label, value, onChange, show, onToggleShow, autoComplete,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  show: boolean;
-  onToggleShow: () => void;
-  autoComplete: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-      <div className="relative">
-        <LockKeyhole className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          id={id}
-          className="h-11 px-10"
-          type={show ? "text" : "password"}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          autoComplete={autoComplete}
-          required
-        />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="absolute right-0 top-1/2 min-h-11 min-w-11 -translate-y-1/2"
-          aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
-          onClick={onToggleShow}
-        >
-          {show ? <EyeOff /> : <Eye />}
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 function ChangePasswordForm() {
@@ -77,9 +28,7 @@ function ChangePasswordForm() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const metRequirements = REQUIREMENTS.map((r) => ({ ...r, met: r.test(newPassword) }));
-  const allRequirementsMet = metRequirements.every((r) => r.met);
-  const passwordsMatch = confirmPassword.length > 0 && newPassword === confirmPassword;
+  const { allRequirementsMet, passwordsMatch } = evaluatePassword(newPassword, confirmPassword);
   const canSubmit = currentPassword.length > 0 && allRequirementsMet && passwordsMatch && !saving;
 
   const submit = async (event: FormEvent) => {
@@ -161,18 +110,7 @@ function ChangePasswordForm() {
               autoComplete="new-password"
             />
 
-            <ul className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3">
-              {metRequirements.map((r) => (
-                <li key={r.key} className={`flex items-center gap-2 text-xs ${r.met ? "text-primary" : "text-muted-foreground"}`}>
-                  {r.met ? <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" /> : <Circle className="h-3.5 w-3.5 flex-shrink-0" />}
-                  {r.label}
-                </li>
-              ))}
-              <li className={`flex items-center gap-2 text-xs ${passwordsMatch ? "text-primary" : "text-muted-foreground"}`}>
-                {passwordsMatch ? <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" /> : <Circle className="h-3.5 w-3.5 flex-shrink-0" />}
-                Las contraseñas coinciden
-              </li>
-            </ul>
+            <PasswordRequirementsChecklist newPassword={newPassword} confirmPassword={confirmPassword} />
 
             <Button type="submit" className="h-11 w-full font-semibold" disabled={!canSubmit}>
               {saving && <LoaderCircle className="animate-spin" />}

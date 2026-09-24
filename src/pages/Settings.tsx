@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { isAxiosError } from "axios";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/ui/card";
@@ -13,12 +13,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import {
   Building2, MapPin, Users, Bell, Shield, Save, Upload, Palette, UserCheck,
-  Mail, Phone, User as UserIcon,
+  Mail, Phone, User as UserIcon, Loader2,
 } from "lucide-react";
 import { RegistrationsPanel } from "@/components/RegistrationsPanel";
 import { CategoriesPanel } from "@/components/CategoriesPanel";
 import { UsersPanel } from "@/components/UsersPanel";
 import { VenuesPanel } from "@/components/VenuesPanel";
+import { PasswordField } from "@/components/PasswordField";
+import { PasswordRequirementsChecklist } from "@/components/PasswordRequirementsChecklist";
+import { evaluatePassword } from "@/lib/passwordRequirements";
 import api from "@/lib/api";
 import { useAuth, type AuthUser } from "@/contexts/AuthContext";
 
@@ -27,6 +30,95 @@ const ROLE_LABELS: Record<AuthUser["role"], string> = {
   coach: "Entrenador",
   parent: "Padre/Tutor",
 };
+
+/**
+ * Cambio de contraseña posterior al primer ingreso (el usuario ya usa la
+ * plataforma con normalidad). El flujo obligatorio de contraseña temporal
+ * vive aparte en `/change-password`; si `must_change_password` siguiera en
+ * `true` este usuario nunca llegaría a `/settings` (lo bloquea `ProtectedRoute`
+ * antes de renderizar la página).
+ */
+function SecurityPanel() {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const { allRequirementsMet, passwordsMatch } = evaluatePassword(newPassword, confirmPassword);
+  const canSubmit = currentPassword.length > 0 && allRequirementsMet && passwordsMatch && !saving;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+
+    setSaving(true);
+    try {
+      await api.post("/auth/change-password/", {
+        current_password: currentPassword,
+        new_password: newPassword,
+        new_password_confirm: confirmPassword,
+      });
+      toast({ title: "Contraseña actualizada correctamente." });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      const detail = isAxiosError(error)
+        ? (error.response?.data as { error?: { message?: string } } | undefined)?.error?.message
+        : null;
+      toast({ title: detail || "No se pudo actualizar la contraseña", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="p-4 sm:p-6">
+      <div className="flex items-center gap-2 mb-1">
+        <Shield className="w-4 h-4 text-primary" />
+        <h3 className="font-semibold">Seguridad</h3>
+      </div>
+      <p className="text-xs text-muted-foreground mb-4">Cambia tu contraseña cuando lo necesites.</p>
+      <form className="space-y-4 max-w-sm" onSubmit={submit}>
+        <PasswordField
+          id="current-password"
+          label="Contraseña actual"
+          value={currentPassword}
+          onChange={setCurrentPassword}
+          show={showCurrent}
+          onToggleShow={() => setShowCurrent((v) => !v)}
+          autoComplete="current-password"
+        />
+        <PasswordField
+          id="new-password"
+          label="Nueva contraseña"
+          value={newPassword}
+          onChange={setNewPassword}
+          show={showNew}
+          onToggleShow={() => setShowNew((v) => !v)}
+          autoComplete="new-password"
+        />
+        <PasswordField
+          id="confirm-password"
+          label="Confirmar nueva contraseña"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          show={showConfirm}
+          onToggleShow={() => setShowConfirm((v) => !v)}
+          autoComplete="new-password"
+        />
+        <PasswordRequirementsChecklist newPassword={newPassword} confirmPassword={confirmPassword} />
+        <Button type="submit" className="gap-2" disabled={!canSubmit}>
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          Actualizar contraseña
+        </Button>
+      </form>
+    </Card>
+  );
+}
 
 /**
  * Perfil de solo lectura para Padre/Jugador: en `/settings` solo ven sus
@@ -88,6 +180,8 @@ function ProfileOnlySettings({ user }: { user: AuthUser }) {
             </div>
           </div>
         </Card>
+
+        <SecurityPanel />
       </div>
     </DashboardLayout>
   );
