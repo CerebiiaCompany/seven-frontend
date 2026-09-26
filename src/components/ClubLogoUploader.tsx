@@ -100,7 +100,8 @@ export function ClubLogoUploader({ logoUrl, shortName, onUploaded }: ClubLogoUpl
         onDragLeave={() => setDragActive(false)}
         onDrop={onDrop}
         className={cn(
-          "relative w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-display font-bold text-xl overflow-hidden cursor-pointer border-2 border-dashed transition-colors flex-shrink-0",
+          "relative w-16 h-16 rounded-2xl flex items-center justify-center text-primary font-display font-bold text-xl overflow-hidden cursor-pointer border-2 border-dashed transition-colors flex-shrink-0",
+          displaySrc ? "bg-transparent" : "bg-primary/10",
           dragActive ? "border-primary" : "border-transparent",
           error && "border-destructive",
         )}

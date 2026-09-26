@@ -18,7 +18,8 @@ export function ClubBrandMark({ className, textClassName }: ClubBrandMarkProps) 
   return (
     <div
       className={cn(
-        "rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden bg-primary shadow-[0_0_20px_hsl(var(--primary)/0.28)]",
+        "rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden",
+        user?.club_logo ? "bg-transparent" : "bg-primary shadow-[0_0_20px_hsl(var(--primary)/0.28)]",
         className,
       )}
     >

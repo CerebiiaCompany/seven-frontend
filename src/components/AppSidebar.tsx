@@ -121,7 +121,7 @@ export function SidebarNav({ collapsed = false, onNavigate }: SidebarContentProp
 export function SidebarBrand({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div className="flex items-center gap-3 px-4 h-16 border-b" style={{ borderColor: "hsl(var(--sidebar-border))" }}>
-      <ClubBrandMark className="w-8 h-8" textClassName="text-[10px]" />
+      <ClubBrandMark className="w-11 h-11" textClassName="text-xs" />
       {!collapsed && (
         <div className="min-w-0">
           <p className="text-sm font-display font-bold text-foreground">Soccer Future</p>
