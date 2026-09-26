@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { isAxiosError } from "axios";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,9 +13,19 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from "@/hooks/use-toast";
 import {
   Trophy, TrendingUp, Calendar, MessageSquare, Bell, CreditCard,
-  Star, Target, Activity, ChevronRight, CheckCircle2, Clock, Plus, Trash2
+  Star, Target, Activity, ChevronRight, CheckCircle2, Clock, Plus, Trash2, Loader2
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
+import api from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+
+interface PlayerProfile {
+  full_name: string;
+  status: "pending" | "confirmed" | "rejected";
+  category: { id: string; name: string } | null;
+  group: { id: string; name: string } | null;
+  position: string;
+}
 
 type Goal = { label: string; current: number; total: number };
 type Match = { date: string; opponent: string; result: string; goals: number; assists: number; rating: number };
@@ -55,6 +66,28 @@ const notifications = [
 ];
 
 export default function Family() {
+  const { user } = useAuth();
+  const [profile, setProfile] = useState<PlayerProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setProfileLoading(true);
+    api.get<PlayerProfile>("/players/me/")
+      .then(({ data }) => { if (!cancelled) setProfile(data); })
+      .catch((error) => {
+        if (cancelled) return;
+        // 404 = la cuenta no tiene perfil de deportista (ej. cuenta de
+        // padre/tutor sin ficha propia todavía): no es un error a mostrar.
+        if (!(isAxiosError(error) && error.response?.status === 404)) {
+          setProfileError(true);
+        }
+      })
+      .finally(() => { if (!cancelled) setProfileLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   const [evolution] = useState(initialEvolution);
   const [matches, setMatches] = useState<Match[]>(initialMatches);
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
@@ -113,7 +146,7 @@ export default function Family() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <p className="text-sm text-muted-foreground">Portal del Acudiente</p>
-            <h1 className="text-2xl sm:text-3xl font-display font-bold">Bienvenido, Familia Rodríguez 👋</h1>
+            <h1 className="text-2xl sm:text-3xl font-display font-bold">Bienvenido, {user?.full_name || "Familia"}</h1>
           </div>
           <Button variant="outline" className="gap-2 relative">
             <Bell className="w-4 h-4" />
@@ -124,37 +157,60 @@ export default function Family() {
 
         {/* Player Hero Card */}
         <Card className="p-6 bg-gradient-to-br from-primary/10 via-card to-card border-primary/20">
-          <div className="flex items-center gap-6">
-            <Avatar className="w-20 h-20 border-4 border-primary/20">
-              <AvatarFallback className="bg-primary/20 text-primary text-2xl font-bold">MR</AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-display font-bold">Mateo Rodríguez</h2>
-                <Badge className="bg-primary/15 text-primary border-0">Sub-15</Badge>
-                <Badge variant="outline">Delantero • #10</Badge>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">Categoría élite • Entrenador: Carlos Mendoza</p>
-              <div className="flex gap-6 mt-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Rating actual</p>
-                  <p className="text-xl font-bold text-primary">8.7</p>
+          {profileLoading ? (
+            <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" /> Cargando datos del deportista...
+            </div>
+          ) : profileError ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No se pudieron cargar los datos del deportista.</p>
+          ) : !profile ? (
+            <p className="text-sm text-muted-foreground text-center py-6">Esta cuenta no tiene un perfil de deportista asociado.</p>
+          ) : (
+            <div className="flex items-center gap-6">
+              <Avatar className="w-20 h-20 border-4 border-primary/20">
+                <AvatarFallback className="bg-primary/20 text-primary text-2xl font-bold">
+                  {profile.full_name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h2 className="text-2xl font-display font-bold">{profile.full_name}</h2>
+                  {profile.category ? (
+                    <Badge className="bg-primary/15 text-primary border-0">{profile.category.name}</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-muted-foreground">Aún no tiene categoría asignada</Badge>
+                  )}
+                  {profile.group && <Badge variant="outline">Grupo {profile.group.name}</Badge>}
+                  {profile.position && <Badge variant="outline">{profile.position}</Badge>}
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Goles temporada</p>
-                  <p className="text-xl font-bold">18</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Asistencias</p>
-                  <p className="text-xl font-bold">9</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Asistencia</p>
-                  <p className="text-xl font-bold">94%</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {profile.status === "pending"
+                    ? "Inscripción pendiente de revisión por un administrador o entrenador"
+                    : profile.status === "rejected"
+                      ? "Inscripción rechazada"
+                      : "Deportista confirmado"}
+                </p>
+                <div className="flex gap-6 mt-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Rating actual</p>
+                    <p className="text-xl font-bold text-primary">8.7</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Goles temporada</p>
+                    <p className="text-xl font-bold">18</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Asistencias</p>
+                    <p className="text-xl font-bold">9</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Asistencia</p>
+                    <p className="text-xl font-bold">94%</p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
