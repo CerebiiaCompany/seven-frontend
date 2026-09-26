@@ -41,9 +41,12 @@ export function canAccessPath(user: AuthUser | null, path: string): boolean {
   if (!user) return false;
   if (path === SETTINGS_PATH) return true;
   if (user.role === "admin") return true;
-  if (user.role === "coach") return COACH_PATHS.has(path);
-  if (user.role === "aux_admin") return AUX_ADMIN_PATHS.has(path);
-  return PLAYER_PATHS.has(path); // player
+  // Las rutas con sub-recursos (p. ej. /players/:id) heredan el permiso de
+  // su sección raíz ("/players"), no solo la coincidencia exacta.
+  const section = path === "/" ? "/" : `/${path.split("/")[1]}`;
+  if (user.role === "coach") return COACH_PATHS.has(section);
+  if (user.role === "aux_admin") return AUX_ADMIN_PATHS.has(section);
+  return PLAYER_PATHS.has(section); // player
 }
 
 export function filterNavSections<T extends { items: { path: string }[] }>(

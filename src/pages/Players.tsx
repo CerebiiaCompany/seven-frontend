@@ -37,6 +37,7 @@ export interface Player {
   phone?: string;
   email?: string;
   guardian?: string;
+  city?: string;
   positionHistory?: PositionEntry[];
 }
 
@@ -102,7 +103,18 @@ const mapApiPlayer = (r: ApiPlayer): Player => ({
   phone: r.phone_number,
   email: r.email,
   guardian: r.guardian_name,
+  city: r.city,
 });
+
+// Trae un deportista puntual desde el backend (no depende de haber pasado
+// antes por el listado): así /players/:id funciona también en un refresh
+// o al llegar por link directo.
+export const fetchPlayer = async (id: string): Promise<Player> => {
+  const { data } = await api.get<ApiPlayer>(`/players/${id}/`);
+  const player = mapApiPlayer(data);
+  cachePlayers([player]);
+  return player;
+};
 
 const ALL_CATEGORIES = "Todas";
 

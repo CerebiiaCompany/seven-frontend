@@ -1,8 +1,9 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
+import { isAxiosError } from "axios";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ArrowLeft, Calendar, MapPin, Award, TrendingUp, Video, Upload, Play, Trash2, History } from "lucide-react";
-import { loadPlayers, type PositionEntry } from "./Players";
+import { loadPlayers, fetchPlayer, type Player, type PositionEntry } from "./Players";
 import { motion } from "framer-motion";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -10,6 +11,7 @@ import {
 } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 
@@ -46,9 +48,42 @@ const evolutionData = [
 const PlayerProfile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const stored = loadPlayers().find((p) => String(p.id) === String(id));
-  const player = stored ? { ...playerData, ...stored } : playerData;
-  const positionHistory: PositionEntry[] = stored?.positionHistory ?? [];
+  // Se muestra de inmediato lo que haya en caché (si se llegó desde el
+  // listado) y se reemplaza en cuanto responde el backend, para que un
+  // refresh o un link directo a /players/:id también traiga al jugador real.
+  const [real, setReal] = useState<Player | null>(
+    () => loadPlayers().find((p) => String(p.id) === String(id)) ?? null
+  );
+  const [loading, setLoading] = useState(true);
+  const [denied, setDenied] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    setDenied(false);
+    fetchPlayer(id)
+      .then(setReal)
+      .catch((error) => {
+        if (isAxiosError(error) && (error.response?.status === 403 || error.response?.status === 404)) {
+          setDenied(true);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const player = real
+    ? {
+        ...playerData,
+        name: real.name,
+        age: real.age,
+        city: real.city || playerData.city,
+        category: real.category,
+        group: real.group,
+        position: real.position,
+      }
+    : playerData;
+  const initials = player.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+  const positionHistory: PositionEntry[] = real?.positionHistory ?? [];
   const videosKey = `sf_player_videos_${id || "default"}`;
   const [videos, setVideos] = useState<PlayerVideo[]>([]);
   const [playing, setPlaying] = useState<PlayerVideo | null>(null);
@@ -74,6 +109,28 @@ const PlayerProfile = () => {
 
   const removeVideo = (vid: string) => persist(videos.filter((v) => v.id !== vid));
 
+  if (denied) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px]">
+          <Card className="p-6 text-sm text-muted-foreground">
+            No se encontró este deportista o no tienes permiso para verlo.
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (loading && !real) {
+    return (
+      <DashboardLayout>
+        <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px]">
+          <Card className="p-6 text-sm text-muted-foreground">Cargando deportista...</Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px]">
@@ -91,7 +148,7 @@ const PlayerProfile = () => {
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6 mb-6">
           <div className="flex flex-col sm:flex-row items-start gap-5">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-xl font-display font-bold text-primary">
-              JP
+              {initials}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-1">
