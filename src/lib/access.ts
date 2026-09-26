@@ -12,7 +12,7 @@ import type { AuthUser } from "@/contexts/AuthContext";
  *                asistencia, rendimiento, squad builder); nada de
  *                Configuración, Pagos, Formularios ni Contenido.
  * - aux_admin  → únicamente Pagos, Formularios y Contenido.
- * - player     → únicamente Portal Familia (también representa a los padres).
+ * - player     → únicamente Portal Futbolista (también representa a los padres).
  *
  * Configuración queda siempre disponible para cualquier rol autenticado; lo
  * que cambia por rol es qué ve dentro de esa pantalla (ver `Settings.tsx`).
