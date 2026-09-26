@@ -222,6 +222,14 @@ export default function Family() {
       toast({ title: "Campos incompletos", description: "Selecciona el partido y completa el marcador.", variant: "destructive" });
       return;
     }
+    if ((Number(newMatch.goals) || 0) > Number(newMatch.scoreFor)) {
+      toast({
+        title: "Goles inválidos",
+        description: `No puedes anotar más goles de los que hizo tu equipo (${newMatch.scoreFor}).`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSavingMatch(true);
     try {
       const { data } = await api.post<PlayerMatchStat>("/player-match-stats/", {
@@ -654,7 +662,11 @@ export default function Family() {
                     type="number"
                     min="0"
                     value={newMatch.scoreFor}
-                    onChange={(e) => setNewMatch({ ...newMatch, scoreFor: e.target.value })}
+                    onChange={(e) => {
+                      const scoreFor = e.target.value;
+                      const goals = scoreFor && Number(newMatch.goals) > Number(scoreFor) ? scoreFor : newMatch.goals;
+                      setNewMatch({ ...newMatch, scoreFor, goals });
+                    }}
                   />
                 </div>
                 <div className="space-y-2">
@@ -675,9 +687,19 @@ export default function Family() {
                     id="m-g"
                     type="number"
                     min="0"
+                    max={newMatch.scoreFor || undefined}
                     value={newMatch.goals}
-                    onChange={(e) => setNewMatch({ ...newMatch, goals: e.target.value })}
+                    onChange={(e) => {
+                      let value = e.target.value;
+                      if (newMatch.scoreFor && Number(value) > Number(newMatch.scoreFor)) {
+                        value = newMatch.scoreFor;
+                      }
+                      setNewMatch({ ...newMatch, goals: value });
+                    }}
                   />
+                  {newMatch.scoreFor && (
+                    <p className="text-[10px] text-muted-foreground">Máximo {newMatch.scoreFor} (goles de tu equipo)</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="m-a">Asistencias 🅰️</Label>
