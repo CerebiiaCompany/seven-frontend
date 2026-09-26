@@ -27,6 +27,47 @@ interface PlayerProfile {
   position: string;
 }
 
+interface TrainingEvent {
+  id: string;
+  title: string;
+  event_type: "training" | "match" | "evaluation" | "meeting";
+  scheduled_at: string;
+  location: string;
+  category: string | null;
+  group: string | null;
+  coach_name: string | null;
+  status: "scheduled" | "completed" | "cancelled";
+  notes: string;
+}
+
+const EVENT_TYPE_LABELS: Record<TrainingEvent["event_type"], string> = {
+  training: "Entrenamiento",
+  match: "Partido",
+  evaluation: "Evaluación",
+  meeting: "Reunión",
+};
+
+const EVENT_STATUS_LABELS: Record<TrainingEvent["status"], string> = {
+  scheduled: "Programado",
+  completed: "Completado",
+  cancelled: "Cancelado",
+};
+
+const MONTH_ABBR = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+
+function eventDayMonth(iso: string) {
+  const d = new Date(iso);
+  return { day: String(d.getDate()).padStart(2, "0"), month: MONTH_ABBR[d.getMonth()] };
+}
+
+function eventTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function eventFullDate(iso: string) {
+  return new Date(iso).toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long" });
+}
+
 type Goal = { label: string; current: number; total: number };
 type Match = { date: string; opponent: string; result: string; goals: number; assists: number; rating: number };
 
@@ -87,6 +128,28 @@ export default function Family() {
       .finally(() => { if (!cancelled) setProfileLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  const [events, setEvents] = useState<TrainingEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<TrainingEvent | null>(null);
+
+  // Solo tiene sentido pedir eventos una vez el jugador tiene categoría y
+  // grupo asignados (los eventos se filtran por esos dos en el backend).
+  const hasCategory = !!profile?.category;
+  const hasGroup = !!profile?.group;
+
+  useEffect(() => {
+    if (!hasCategory || !hasGroup) return;
+    let cancelled = false;
+    setEventsLoading(true);
+    setEventsError(false);
+    api.get<TrainingEvent[]>("/training-sessions/me/")
+      .then(({ data }) => { if (!cancelled) setEvents(data); })
+      .catch(() => { if (!cancelled) setEventsError(true); })
+      .finally(() => { if (!cancelled) setEventsLoading(false); });
+    return () => { cancelled = true; };
+  }, [hasCategory, hasGroup]);
 
   const [evolution] = useState(initialEvolution);
   const [matches, setMatches] = useState<Match[]>(initialMatches);
@@ -381,25 +444,46 @@ export default function Family() {
               <h3 className="font-semibold mb-3 flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-primary" /> Próximos eventos
               </h3>
-              <div className="space-y-2">
-                {[
-                  { day: "19", month: "ABR", title: "Partido vs. Real Cali", time: "10:00" },
-                  { day: "21", month: "ABR", title: "Entrenamiento", time: "15:00" },
-                  { day: "23", month: "ABR", title: "Evaluación física", time: "16:30" },
-                ].map((e, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                    <div className="w-11 h-11 rounded-lg bg-primary/10 flex flex-col items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-bold text-primary leading-none">{e.day}</span>
-                      <span className="text-[9px] text-primary uppercase">{e.month}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{e.title}</p>
-                      <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> {e.time}</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                ))}
-              </div>
+              {!hasCategory ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">Aún no tiene categoría asignada.</p>
+              ) : !hasGroup ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">
+                  Esperando que le asignen un grupo dentro de {profile?.category?.name}.
+                </p>
+              ) : eventsLoading ? (
+                <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando eventos...
+                </div>
+              ) : eventsError ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">No se pudieron cargar los eventos.</p>
+              ) : events.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">No hay eventos programados por ahora.</p>
+              ) : (
+                <div className="space-y-2">
+                  {events.map((e) => {
+                    const { day, month } = eventDayMonth(e.scheduled_at);
+                    return (
+                      <div
+                        key={e.id}
+                        onClick={() => setSelectedEvent(e)}
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                      >
+                        <div className="w-11 h-11 rounded-lg bg-primary/10 flex flex-col items-center justify-center flex-shrink-0">
+                          <span className="text-sm font-bold text-primary leading-none">{day}</span>
+                          <span className="text-[9px] text-primary uppercase">{month}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{e.title}</p>
+                          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <Clock className="w-2.5 h-2.5" /> {eventTime(e.scheduled_at)}
+                          </p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </Card>
           </div>
         </div>
@@ -555,6 +639,58 @@ export default function Family() {
             <Button variant="outline" onClick={() => setMatchOpen(false)}>Cancelar</Button>
             <Button onClick={handleAddMatch}>Guardar partido</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Event Detail Dialog */}
+      <Dialog open={!!selectedEvent} onOpenChange={(o) => !o && setSelectedEvent(null)}>
+        <DialogContent>
+          {selectedEvent && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedEvent.title}</DialogTitle>
+                <DialogDescription className="capitalize">{eventFullDate(selectedEvent.scheduled_at)}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Tipo</span>
+                  <Badge variant="outline">{EVENT_TYPE_LABELS[selectedEvent.event_type]}</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Hora</span>
+                  <span className="font-medium">{eventTime(selectedEvent.scheduled_at)}</span>
+                </div>
+                {selectedEvent.location && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Lugar</span>
+                    <span className="font-medium">{selectedEvent.location}</span>
+                  </div>
+                )}
+                {selectedEvent.category && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Categoría</span>
+                    <span className="font-medium">{selectedEvent.category}{selectedEvent.group ? ` • Grupo ${selectedEvent.group}` : ""}</span>
+                  </div>
+                )}
+                {selectedEvent.coach_name && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Entrenador</span>
+                    <span className="font-medium">{selectedEvent.coach_name}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Estado</span>
+                  <Badge className="bg-primary/15 text-primary border-0">{EVENT_STATUS_LABELS[selectedEvent.status]}</Badge>
+                </div>
+                {selectedEvent.notes && (
+                  <div>
+                    <span className="text-muted-foreground block mb-1">Notas</span>
+                    <p className="text-foreground/80">{selectedEvent.notes}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </DashboardLayout>
