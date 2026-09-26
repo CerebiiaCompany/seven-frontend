@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
 import api from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface PlayerProfile {
@@ -111,6 +112,7 @@ export default function Family() {
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState(false);
+  const [photoZoomOpen, setPhotoZoomOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,7 +232,11 @@ export default function Family() {
             <p className="text-sm text-muted-foreground text-center py-6">Esta cuenta no tiene un perfil de deportista asociado.</p>
           ) : (
             <div className="flex items-center gap-6">
-              <Avatar className="w-20 h-20 border-4 border-primary/20">
+              <Avatar
+                className={cn("w-20 h-20 border-4 border-primary/20", user?.photo && "cursor-pointer")}
+                onClick={() => user?.photo && setPhotoZoomOpen(true)}
+              >
+                {user?.photo && <AvatarImage src={user.photo} alt={profile.full_name} className="object-cover" />}
                 <AvatarFallback className="bg-primary/20 text-primary text-2xl font-bold">
                   {profile.full_name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
                 </AvatarFallback>
@@ -639,6 +645,15 @@ export default function Family() {
             <Button variant="outline" onClick={() => setMatchOpen(false)}>Cancelar</Button>
             <Button onClick={handleAddMatch}>Guardar partido</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Player Photo Zoom */}
+      <Dialog open={photoZoomOpen} onOpenChange={setPhotoZoomOpen}>
+        <DialogContent className="max-w-md p-2">
+          {user?.photo && (
+            <img src={user.photo} alt={profile?.full_name || "Foto de perfil"} className="w-full h-full rounded-md object-contain" />
+          )}
         </DialogContent>
       </Dialog>
 
