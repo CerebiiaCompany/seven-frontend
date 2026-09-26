@@ -262,7 +262,6 @@ export default function Family() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <p className="text-sm text-muted-foreground">Portal del Acudiente</p>
             <h1 className="text-2xl sm:text-3xl font-display font-bold">Bienvenido, {user?.full_name || "Familia"}</h1>
           </div>
           <Button variant="outline" className="gap-2 relative">

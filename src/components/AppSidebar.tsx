@@ -34,7 +34,7 @@ export const navSections = [
       { icon: CreditCard, label: "Pagos", path: "/payments" },
       { icon: FileText, label: "Formularios", path: "/forms" },
       { icon: Video, label: "Contenido", path: "/content" },
-      { icon: GraduationCap, label: "Portal Familia", path: "/family" },
+      { icon: GraduationCap, label: "Portal Futbolista", path: "/family" },
     ],
   },
 ];
