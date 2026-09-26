@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Copy, Plus, Trash2, Users, UserX } from "lucide-react";
+import { Copy, Loader2, Plus, Trash2, Users, UserX } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Color por rol (mismos tokens `--kpi-*` que usan los KPIs del dashboard),
 // para poder identificar el rol de un vistazo en los chips y las filas.
@@ -59,6 +60,7 @@ const randomPassword = () => crypto.randomUUID().replace(/-/g, "").slice(0, 12);
  * ninguno nuevo aquí.
  */
 export function UsersPanel() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [roleFilter, setRoleFilter] = useState("all");
@@ -68,6 +70,8 @@ export function UsersPanel() {
   const [inviteForm, setInviteForm] = useState(emptyInvite);
   const [inviting, setInviting] = useState(false);
   const [credentials, setCredentials] = useState<NewUserCredentials | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,13 +109,21 @@ export function UsersPanel() {
     }
   };
 
-  const removeUser = async (user: AdminUser) => {
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.delete(`/users/${user.id}/`);
-      setUsers((prev) => prev.filter((u) => u.id !== user.id));
-      toast({ title: "Usuario eliminado", description: `${user.full_name} fue desactivado.` });
+      await api.delete(`/users/${deleteTarget.id}/`);
+      setUsers((prev) => prev.filter((u) => u.id !== deleteTarget.id));
+      toast({ title: "Usuario eliminado", description: `${deleteTarget.full_name} y toda su información fueron eliminados permanentemente.` });
+      setDeleteTarget(null);
     } catch (error) {
-      toast({ title: "No se pudo eliminar el usuario", variant: "destructive" });
+      const detail = isAxiosError(error)
+        ? (error.response?.data as { error?: { message?: string } } | undefined)?.error?.message
+        : null;
+      toast({ title: detail || "No se pudo eliminar el usuario", variant: "destructive" });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -363,9 +375,11 @@ export function UsersPanel() {
                       {roles.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Button variant="ghost" size="icon" className="text-destructive" onClick={() => removeUser(u)}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {u.id !== currentUser?.id && (
+                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleteTarget(u)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             );
@@ -374,8 +388,28 @@ export function UsersPanel() {
       )}
       <p className="text-xs text-muted-foreground mt-4">
         <Badge variant="outline" className="mr-2">Nota</Badge>
-        Eliminar desactiva la cuenta; no borra su historial deportivo.
+        Eliminar un usuario es permanente y no se puede deshacer.
       </p>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && !deleting && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar a {deleteTarget?.full_name || "este usuario"}?</DialogTitle>
+            <DialogDescription>
+              Esta acción no se puede revertir y se perderá toda la información de este usuario.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-2 gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="destructive" className="gap-2" onClick={confirmDelete} disabled={deleting}>
+              {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
+              {deleting ? "Eliminando..." : "Eliminar definitivamente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
