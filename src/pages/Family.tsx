@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -83,6 +84,17 @@ interface PlayerMatchStat {
   rating: string;
 }
 
+interface TrainingCommentDto {
+  id: string;
+  training_session_id: string;
+  event_title: string;
+  scheduled_at: string;
+  coach_name: string | null;
+  rating: number;
+  text: string;
+  created_at: string;
+}
+
 const initialEvolution = [
   { week: "S1", rating: 7.2, goals: 1 },
   { week: "S2", rating: 7.5, goals: 2 },
@@ -96,12 +108,6 @@ const initialGoals: Goal[] = [
   { label: "Goles", current: 4, total: 5 },
   { label: "Entrenamientos", current: 12, total: 14 },
   { label: "Pases completados", current: 87, total: 100 },
-];
-
-const comments = [
-  { coach: "Carlos Mendoza", date: "Hace 2 días", text: "Excelente progreso en definición. Mantén el trabajo defensivo en los partidos de visitante.", rating: 5 },
-  { coach: "Ana Restrepo", date: "Hace 1 semana", text: "Mejora notable en el control bajo presión. Trabajaremos esta semana en pase largo.", rating: 4 },
-  { coach: "Carlos Mendoza", date: "Hace 2 semanas", text: "Liderazgo destacado en el último partido. Sigue así.", rating: 5 },
 ];
 
 const notifications = [
@@ -173,6 +179,18 @@ export default function Family() {
       .then(({ data }) => { if (!cancelled) setMatchStats(data); })
       .catch(() => { /* sin historial todavía o sin perfil de deportista: no es un error a mostrar */ })
       .finally(() => { if (!cancelled) setMatchStatsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const [trainingComments, setTrainingComments] = useState<TrainingCommentDto[]>([]);
+  const [trainingCommentsLoading, setTrainingCommentsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get<TrainingCommentDto[]>("/training-comments/")
+      .then(({ data }) => { if (!cancelled) setTrainingComments(data); })
+      .catch(() => { /* sin comentarios todavía o sin perfil de deportista: no es un error a mostrar */ })
+      .finally(() => { if (!cancelled) setTrainingCommentsLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
@@ -253,6 +271,62 @@ export default function Family() {
       toast({ title: detail || "No se pudo registrar el partido", variant: "destructive" });
     } finally {
       setSavingMatch(false);
+    }
+  };
+
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [availableTrainings, setAvailableTrainings] = useState<TrainingEvent[]>([]);
+  const [availableTrainingsLoading, setAvailableTrainingsLoading] = useState(false);
+  const [savingComment, setSavingComment] = useState(false);
+  const [newComment, setNewComment] = useState({ training_session_id: "", rating: 0, text: "" });
+
+  const openCommentDialog = () => {
+    setCommentOpen(true);
+    setAvailableTrainingsLoading(true);
+    api.get<TrainingEvent[]>("/training-sessions/my-trainings/")
+      .then(({ data }) => setAvailableTrainings(data))
+      .catch(() => setAvailableTrainings([]))
+      .finally(() => setAvailableTrainingsLoading(false));
+  };
+
+  const selectedTraining = availableTrainings.find((e) => e.id === newComment.training_session_id) || null;
+
+  const resetCommentForm = () => {
+    setNewComment({ training_session_id: "", rating: 0, text: "" });
+  };
+
+  const handleAddComment = async () => {
+    if (!newComment.training_session_id) {
+      toast({ title: "Selecciona un entrenamiento", variant: "destructive" });
+      return;
+    }
+    if (newComment.rating < 1) {
+      toast({ title: "Selecciona una calificación de 1 a 5 estrellas", variant: "destructive" });
+      return;
+    }
+    if (!newComment.text.trim()) {
+      toast({ title: "Escribe un comentario", variant: "destructive" });
+      return;
+    }
+    setSavingComment(true);
+    try {
+      const { data } = await api.post<TrainingCommentDto>("/training-comments/", {
+        training_session_id: newComment.training_session_id,
+        rating: newComment.rating,
+        text: newComment.text.trim(),
+      });
+      setTrainingComments((prev) => [data, ...prev]);
+      setAvailableTrainings((prev) => prev.filter((e) => e.id !== newComment.training_session_id));
+      resetCommentForm();
+      setCommentOpen(false);
+      toast({ title: "Comentario registrado", description: data.event_title });
+    } catch (error) {
+      const detail = isAxiosError(error)
+        ? (error.response?.data as { error?: { message?: string } } | undefined)?.error?.message
+        : null;
+      toast({ title: detail || "No se pudo registrar el comentario", variant: "destructive" });
+    } finally {
+      setSavingComment(false);
     }
   };
 
@@ -450,30 +524,43 @@ export default function Family() {
 
               <TabsContent value="comments">
                 <Card className="p-6 space-y-4">
-                  <h3 className="font-semibold">Comentarios del entrenador</h3>
-                  {comments.map((c, i) => (
-                    <div key={i} className="p-4 rounded-lg border bg-muted/30">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Avatar className="w-7 h-7">
-                            <AvatarFallback className="text-xs bg-primary/15 text-primary font-semibold">
-                              {c.coach.split(" ").map(n => n[0]).join("")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="text-sm font-medium">{c.coach}</p>
-                            <p className="text-xs text-muted-foreground">{c.date}</p>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold">Mis comentarios de entrenamiento</h3>
+                    <Button size="sm" variant="outline" className="gap-1.5" onClick={openCommentDialog}>
+                      <Plus className="w-3.5 h-3.5" /> Registrar comentario
+                    </Button>
+                  </div>
+                  {trainingCommentsLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Cargando comentarios...
+                    </div>
+                  ) : trainingComments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">Aún no has registrado comentarios de entrenamiento.</p>
+                  ) : (
+                    trainingComments.map((c) => (
+                      <div key={c.id} className="p-4 rounded-lg border bg-muted/30">
+                        <div className="flex items-center justify-between mb-2 gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Avatar className="w-7 h-7 flex-shrink-0">
+                              <AvatarFallback className="text-xs bg-primary/15 text-primary font-semibold">
+                                {(c.coach_name || "?").split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("")}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{c.coach_name || "Entrenador"}</p>
+                              <p className="text-xs text-muted-foreground truncate">{c.event_title} · {eventFullDate(c.scheduled_at)}</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-shrink-0">
+                            {Array.from({ length: c.rating }).map((_, j) => (
+                              <Star key={j} className="w-3.5 h-3.5 fill-[hsl(var(--kpi-amber))] text-[hsl(var(--kpi-amber))]" />
+                            ))}
                           </div>
                         </div>
-                        <div className="flex">
-                          {Array.from({ length: c.rating }).map((_, j) => (
-                            <Star key={j} className="w-3.5 h-3.5 fill-[hsl(var(--kpi-amber))] text-[hsl(var(--kpi-amber))]" />
-                          ))}
-                        </div>
+                        <p className="text-sm text-foreground/80">{c.text}</p>
                       </div>
-                      <p className="text-sm text-foreground/80">{c.text}</p>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </Card>
               </TabsContent>
             </Tabs>
@@ -737,6 +824,99 @@ export default function Family() {
             <Button onClick={handleAddMatch} disabled={savingMatch || availableMatches.length === 0} className="gap-2">
               {savingMatch && <Loader2 className="w-4 h-4 animate-spin" />}
               {savingMatch ? "Guardando..." : "Guardar partido"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Comment Dialog */}
+      <Dialog open={commentOpen} onOpenChange={(o) => { setCommentOpen(o); if (!o) resetCommentForm(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar comentario de entrenamiento</DialogTitle>
+            <DialogDescription>Elige el entrenamiento y cuéntale a tu entrenador cómo te fue.</DialogDescription>
+          </DialogHeader>
+
+          {availableTrainingsLoading ? (
+            <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" /> Cargando entrenamientos...
+            </div>
+          ) : availableTrainings.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              No tienes entrenamientos pendientes por comentar. Un nuevo entrenamiento aparecerá aquí en cuanto tu entrenador lo agende.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="c-event">Entrenamiento</Label>
+                <select
+                  id="c-event"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={newComment.training_session_id}
+                  onChange={(e) => setNewComment({ ...newComment, training_session_id: e.target.value })}
+                >
+                  <option value="">Selecciona un entrenamiento</option>
+                  {availableTrainings.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {eventFullDate(e.scheduled_at)} — {e.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedTraining && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Fecha</Label>
+                    <Input disabled value={eventFullDate(selectedTraining.scheduled_at)} className="capitalize" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Entrenador</Label>
+                    <Input disabled value={selectedTraining.coach_name || "Sin asignar"} />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label>Calificación</Label>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setNewComment({ ...newComment, rating: n })}
+                      aria-label={`${n} estrella${n > 1 ? "s" : ""}`}
+                      className="p-0.5"
+                    >
+                      <Star
+                        className={cn(
+                          "w-6 h-6 transition-colors",
+                          n <= newComment.rating ? "fill-[hsl(var(--kpi-amber))] text-[hsl(var(--kpi-amber))]" : "text-muted-foreground",
+                        )}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="c-text">Comentario</Label>
+                <Textarea
+                  id="c-text"
+                  rows={4}
+                  placeholder="Ej. Sentí que mejoré el control bajo presión..."
+                  value={newComment.text}
+                  onChange={(e) => setNewComment({ ...newComment, text: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCommentOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAddComment} disabled={savingComment || availableTrainings.length === 0} className="gap-2">
+              {savingComment && <Loader2 className="w-4 h-4 animate-spin" />}
+              {savingComment ? "Guardando..." : "Guardar comentario"}
             </Button>
           </DialogFooter>
         </DialogContent>
