@@ -13,6 +13,7 @@ export type AuthUser = {
   is_verified: boolean;
   must_change_password: boolean;
   club_name: string;
+  club_logo: string | null;
   created_at: string;
 };
 

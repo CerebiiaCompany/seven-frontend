@@ -16,13 +16,14 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import {
-  Building2, MapPin, Users, Bell, Shield, Save, Upload, UserCheck,
+  Building2, MapPin, Users, Bell, Shield, Save, UserCheck,
   Mail, Phone, User as UserIcon, Loader2, Lock, type LucideIcon,
 } from "lucide-react";
 import { RegistrationsPanel } from "@/components/RegistrationsPanel";
 import { CategoriesPanel } from "@/components/CategoriesPanel";
 import { UsersPanel } from "@/components/UsersPanel";
 import { VenuesPanel } from "@/components/VenuesPanel";
+import { ClubLogoUploader } from "@/components/ClubLogoUploader";
 import { PasswordField } from "@/components/PasswordField";
 import { PasswordRequirementsChecklist } from "@/components/PasswordRequirementsChecklist";
 import { evaluatePassword } from "@/lib/passwordRequirements";
@@ -275,6 +276,7 @@ const STORAGE_KEY = "sf_club_settings";
 
 /** Configuración completa del club: solo para administradores/entrenadores. */
 function AdminClubSettings() {
+  const { user, setUser } = useAuth();
   const [club, setClub] = useState<ClubData>(EMPTY_CLUB);
   const [clubLoading, setClubLoading] = useState(true);
   const [clubError, setClubError] = useState(false);
@@ -340,6 +342,14 @@ function AdminClubSettings() {
   const set = <K extends keyof ClubData>(k: K, v: ClubData[K]) => setClub((p) => ({ ...p, [k]: v }));
   const setExtra = <K extends keyof Extras>(k: K, v: Extras[K]) => setExtras((p) => ({ ...p, [k]: v }));
 
+  // Además del preview local, actualiza `AuthContext` (mismo estado global
+  // que consumen el sidebar y la barra móvil) para que el nuevo escudo se
+  // refleje en toda la app sin recargar la página.
+  const onLogoUploaded = (newLogo: string | null) => {
+    setClub((p) => ({ ...p, logo: newLogo }));
+    if (user) setUser({ ...user, club_logo: newLogo });
+  };
+
   return (
     <DashboardLayout>
       <div className="p-4 sm:p-6 lg:p-8 max-w-[1200px] space-y-5">
@@ -383,20 +393,7 @@ function AdminClubSettings() {
                   </Card>
                 )}
                 <Card className="p-4 sm:p-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
-                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-display font-bold text-xl overflow-hidden">
-                      {club.logo ? (
-                        <img src={club.logo} alt="Escudo del club" className="w-full h-full object-cover" />
-                      ) : (
-                        club.short_name.slice(0, 3).toUpperCase() || "SF"
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold">Escudo del club</p>
-                      <p className="text-xs text-muted-foreground">PNG o SVG, mínimo 512x512px</p>
-                    </div>
-                    <Button variant="outline" className="gap-2 w-full sm:w-auto"><Upload className="w-4 h-4" /> Subir logo</Button>
-                  </div>
+                  <ClubLogoUploader logoUrl={club.logo} shortName={club.short_name} onUploaded={onLogoUploaded} />
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div><Label>Nombre del club</Label><Input value={club.name} onChange={(e) => set("name", e.target.value)} /></div>

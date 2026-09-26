@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { filterNavSections } from "@/lib/access";
+import { ClubBrandMark } from "@/components/ClubBrandMark";
 
 export const navSections = [
   {
@@ -120,9 +121,7 @@ export function SidebarNav({ collapsed = false, onNavigate }: SidebarContentProp
 export function SidebarBrand({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div className="flex items-center gap-3 px-4 h-16 border-b" style={{ borderColor: "hsl(var(--sidebar-border))" }}>
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-primary shadow-[0_0_20px_hsl(var(--primary)/0.28)]">
-        <Zap className="w-4 h-4 text-primary-foreground" />
-      </div>
+      <ClubBrandMark className="w-8 h-8" textClassName="text-[10px]" />
       {!collapsed && (
         <div className="min-w-0">
           <p className="text-sm font-display font-bold text-foreground">Soccer Future</p>
