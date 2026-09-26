@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { isAxiosError } from "axios";
 import api from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { Copy, Plus, Trash2, Users, UserX } from "lucide-react";
+
+// Color por rol (mismos tokens `--kpi-*` que usan los KPIs del dashboard),
+// para poder identificar el rol de un vistazo en los chips y las filas.
+const ROLE_COLOR_VAR: Record<string, string> = {
+  coach: "--kpi-blue",
+  parent: "--kpi-amber",
+  player: "--kpi-green",
+};
+const roleColorVar = (role: string) => ROLE_COLOR_VAR[role] ?? "--primary";
 
 interface AdminUser {
   id: string;
@@ -50,6 +60,7 @@ const randomPassword = () => crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 export function UsersPanel() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
+  const [roleFilter, setRoleFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -161,6 +172,12 @@ export function UsersPanel() {
     toast({ title: "Contraseña copiada." });
   };
 
+  const filteredUsers = roleFilter === "all" ? users : users.filter((u) => u.role === roleFilter);
+  const roleCounts = roles.reduce<Record<string, number>>((acc, r) => {
+    acc[r.value] = users.filter((u) => u.role === r.value).length;
+    return acc;
+  }, {});
+
   if (denied) {
     return (
       <Card className="p-6 text-sm text-muted-foreground">
@@ -173,8 +190,11 @@ export function UsersPanel() {
     <Card className="p-4 sm:p-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
-          <h3 className="font-semibold">Usuarios y roles</h3>
-          <p className="text-xs text-muted-foreground">Quién puede acceder al panel y con qué permisos</p>
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-primary" />
+            <h3 className="font-semibold">Usuarios y roles</h3>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">Quién puede acceder al panel y con qué permisos</p>
         </div>
         <Dialog open={inviteOpen} onOpenChange={(o) => { setInviteOpen(o); if (!o) setInviteForm(emptyInvite); }}>
           <Button variant="outline" className="gap-2 w-full sm:w-auto" onClick={() => setInviteOpen(true)}>
@@ -259,40 +279,98 @@ export function UsersPanel() {
         </DialogContent>
       </Dialog>
 
+      {!loading && users.length > 0 && (
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 themed-scroll">
+          <button
+            type="button"
+            onClick={() => setRoleFilter("all")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex-shrink-0",
+              roleFilter === "all"
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-transparent text-muted-foreground border-border hover:bg-muted",
+            )}
+          >
+            Todos <span className="opacity-70">{users.length}</span>
+          </button>
+          {roles.map((r) => {
+            const colorVar = roleColorVar(r.value);
+            const active = roleFilter === r.value;
+            return (
+              <button
+                key={r.value}
+                type="button"
+                onClick={() => setRoleFilter(r.value)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex-shrink-0",
+                  active ? "border-transparent" : "bg-transparent border-border text-muted-foreground hover:bg-muted",
+                )}
+                style={active ? { background: `hsl(var(${colorVar}) / 0.15)`, color: `hsl(var(${colorVar}))` } : undefined}
+              >
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: `hsl(var(${colorVar}))` }} />
+                {r.label} <span className="opacity-70">{roleCounts[r.value] ?? 0}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {loading ? (
         <p className="text-sm text-muted-foreground py-6 text-center">Cargando usuarios...</p>
       ) : users.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">Todavía no hay usuarios registrados.</p>
+        <div className="flex flex-col items-center gap-2 py-10 text-center">
+          <div className="w-11 h-11 rounded-full bg-muted flex items-center justify-center">
+            <Users className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm text-muted-foreground">Todavía no hay usuarios registrados.</p>
+        </div>
+      ) : filteredUsers.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-10 text-center">
+          <div className="w-11 h-11 rounded-full bg-muted flex items-center justify-center">
+            <UserX className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm text-muted-foreground">No hay usuarios con ese rol.</p>
+        </div>
       ) : (
         <div className="space-y-2">
-          {users.map((u) => (
-            <div key={u.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
-                  {u.initial}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium truncate">{u.full_name || "Sin nombre"}</p>
-                    {!u.is_active && <Badge variant="outline" className="text-[10px]">Inactivo</Badge>}
-                    {u.is_staff && <Badge variant="secondary" className="text-[10px]">Admin</Badge>}
+          {filteredUsers.map((u) => {
+            const colorVar = roleColorVar(u.role);
+            return (
+              <div
+                key={u.id}
+                className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl border transition-all hover:shadow-sm hover:border-primary/30"
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+                    style={{ background: `hsl(var(${colorVar}) / 0.15)`, color: `hsl(var(${colorVar}))` }}
+                  >
+                    {u.initial}
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{u.full_name || "Sin nombre"}</p>
+                      {!u.is_active && <Badge variant="outline" className="text-[10px]">Inactivo</Badge>}
+                      {u.is_staff && <Badge variant="secondary" className="text-[10px]">Admin</Badge>}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: `hsl(var(${colorVar}))` }} />
+                  <Select value={u.role} onValueChange={(v) => changeRole(u, v)}>
+                    <SelectTrigger className="w-full sm:w-[170px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {roles.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="ghost" size="icon" className="text-destructive" onClick={() => removeUser(u)}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Select value={u.role} onValueChange={(v) => changeRole(u, v)}>
-                  <SelectTrigger className="w-full sm:w-[170px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {roles.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => removeUser(u)}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       <p className="text-xs text-muted-foreground mt-4">
