@@ -70,7 +70,18 @@ function eventFullDate(iso: string) {
 }
 
 type Goal = { label: string; current: number; total: number };
-type Match = { date: string; opponent: string; result: string; goals: number; assists: number; rating: number };
+
+interface PlayerMatchStat {
+  id: string;
+  event_title: string;
+  scheduled_at: string;
+  location: string;
+  score_for: number;
+  score_against: number;
+  goals: number;
+  assists: number;
+  rating: string;
+}
 
 const initialEvolution = [
   { week: "S1", rating: 7.2, goals: 1 },
@@ -79,13 +90,6 @@ const initialEvolution = [
   { week: "S4", rating: 8.1, goals: 3 },
   { week: "S5", rating: 8.4, goals: 2 },
   { week: "S6", rating: 8.7, goals: 4 },
-];
-
-const initialMatches: Match[] = [
-  { date: "12 Abr", opponent: "Atlético FC", result: "W 3-1", goals: 2, assists: 1, rating: 8.9 },
-  { date: "05 Abr", opponent: "Real Cali", result: "W 2-0", goals: 1, assists: 0, rating: 8.4 },
-  { date: "29 Mar", opponent: "Deportivo Sur", result: "D 1-1", goals: 1, assists: 0, rating: 7.8 },
-  { date: "22 Mar", opponent: "Juventud", result: "W 4-2", goals: 2, assists: 2, rating: 9.1 },
 ];
 
 const initialGoals: Goal[] = [
@@ -154,17 +158,41 @@ export default function Family() {
   }, [hasCategory, hasGroup]);
 
   const [evolution] = useState(initialEvolution);
-  const [matches, setMatches] = useState<Match[]>(initialMatches);
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
 
   const [goalOpen, setGoalOpen] = useState(false);
   const [newGoal, setNewGoal] = useState({ label: "", current: "0", total: "" });
 
+  const [matchStats, setMatchStats] = useState<PlayerMatchStat[]>([]);
+  const [matchStatsLoading, setMatchStatsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get<PlayerMatchStat[]>("/player-match-stats/")
+      .then(({ data }) => { if (!cancelled) setMatchStats(data); })
+      .catch(() => { /* sin historial todavía o sin perfil de deportista: no es un error a mostrar */ })
+      .finally(() => { if (!cancelled) setMatchStatsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   const [matchOpen, setMatchOpen] = useState(false);
+  const [availableMatches, setAvailableMatches] = useState<TrainingEvent[]>([]);
+  const [availableMatchesLoading, setAvailableMatchesLoading] = useState(false);
+  const [savingMatch, setSavingMatch] = useState(false);
   const [newMatch, setNewMatch] = useState({
-    date: "", opponent: "", result: "W", scoreFor: "", scoreAgainst: "",
-    goals: "0", assists: "0", rating: "7.0",
+    training_session_id: "", scoreFor: "", scoreAgainst: "", goals: "0", assists: "0", rating: "7.0",
   });
+
+  const openMatchDialog = () => {
+    setMatchOpen(true);
+    setAvailableMatchesLoading(true);
+    api.get<TrainingEvent[]>("/training-sessions/my-matches/")
+      .then(({ data }) => setAvailableMatches(data))
+      .catch(() => setAvailableMatches([]))
+      .finally(() => setAvailableMatchesLoading(false));
+  };
+
+  const selectedMatch = availableMatches.find((e) => e.id === newMatch.training_session_id) || null;
 
   const handleAddGoal = () => {
     if (!newGoal.label.trim() || !newGoal.total) {
@@ -185,23 +213,38 @@ export default function Family() {
     setGoals(goals.filter((_, i) => i !== idx));
   };
 
-  const handleAddMatch = () => {
-    if (!newMatch.date || !newMatch.opponent.trim() || !newMatch.scoreFor || !newMatch.scoreAgainst) {
-      toast({ title: "Campos incompletos", description: "Completa fecha, rival y marcador.", variant: "destructive" });
+  const resetMatchForm = () => {
+    setNewMatch({ training_session_id: "", scoreFor: "", scoreAgainst: "", goals: "0", assists: "0", rating: "7.0" });
+  };
+
+  const handleAddMatch = async () => {
+    if (!newMatch.training_session_id || !newMatch.scoreFor || !newMatch.scoreAgainst) {
+      toast({ title: "Campos incompletos", description: "Selecciona el partido y completa el marcador.", variant: "destructive" });
       return;
     }
-    const result = `${newMatch.result} ${newMatch.scoreFor}-${newMatch.scoreAgainst}`;
-    setMatches([{
-      date: newMatch.date,
-      opponent: newMatch.opponent.trim(),
-      result,
-      goals: Number(newMatch.goals) || 0,
-      assists: Number(newMatch.assists) || 0,
-      rating: Number(newMatch.rating) || 0,
-    }, ...matches]);
-    setNewMatch({ date: "", opponent: "", result: "W", scoreFor: "", scoreAgainst: "", goals: "0", assists: "0", rating: "7.0" });
-    setMatchOpen(false);
-    toast({ title: "Partido registrado", description: `vs. ${newMatch.opponent}` });
+    setSavingMatch(true);
+    try {
+      const { data } = await api.post<PlayerMatchStat>("/player-match-stats/", {
+        training_session_id: newMatch.training_session_id,
+        score_for: Number(newMatch.scoreFor),
+        score_against: Number(newMatch.scoreAgainst),
+        goals: Number(newMatch.goals) || 0,
+        assists: Number(newMatch.assists) || 0,
+        rating: newMatch.rating,
+      });
+      setMatchStats((prev) => [data, ...prev]);
+      setAvailableMatches((prev) => prev.filter((e) => e.id !== newMatch.training_session_id));
+      resetMatchForm();
+      setMatchOpen(false);
+      toast({ title: "Partido registrado", description: data.event_title });
+    } catch (error) {
+      const detail = isAxiosError(error)
+        ? (error.response?.data as { error?: { message?: string } } | undefined)?.error?.message
+        : null;
+      toast({ title: detail || "No se pudo registrar el partido", variant: "destructive" });
+    } finally {
+      setSavingMatch(false);
+    }
   };
 
   return (
@@ -353,30 +396,42 @@ export default function Family() {
                 <Card className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold">Estadísticas por partido</h3>
-                    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setMatchOpen(true)}>
+                    <Button size="sm" variant="outline" className="gap-1.5" onClick={openMatchDialog}>
                       <Plus className="w-3.5 h-3.5" /> Registrar partido
                     </Button>
                   </div>
-                  <div className="space-y-2">
-                    {matches.map((m, i) => (
-                      <div key={i} className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/40 transition-colors">
-                        <div className="text-center w-14">
-                          <p className="text-xs text-muted-foreground">{m.date}</p>
-                          <Badge variant={m.result.startsWith("W") ? "default" : "outline"} className="mt-1 text-xs">
-                            {m.result}
-                          </Badge>
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">vs. {m.opponent}</p>
-                          <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
-                            <span>⚽ {m.goals}</span>
-                            <span>🅰️ {m.assists}</span>
+                  {matchStatsLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Cargando historial...
+                    </div>
+                  ) : matchStats.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">Aún no has registrado ningún partido.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {matchStats.map((m) => {
+                        const { day, month } = eventDayMonth(m.scheduled_at);
+                        const outcome = m.score_for > m.score_against ? "V" : m.score_for === m.score_against ? "E" : "D";
+                        return (
+                          <div key={m.id} className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/40 transition-colors">
+                            <div className="text-center w-14">
+                              <p className="text-xs text-muted-foreground">{day} {month}</p>
+                              <Badge variant={outcome === "V" ? "default" : "outline"} className="mt-1 text-xs">
+                                {outcome} {m.score_for}-{m.score_against}
+                              </Badge>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{m.event_title}</p>
+                              <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
+                                <span>⚽ {m.goals}</span>
+                                <span>🅰️ {m.assists}</span>
+                              </div>
+                            </div>
+                            <Badge className="bg-primary/15 text-primary border-0">⭐ {m.rating}</Badge>
                           </div>
-                        </div>
-                        <Badge className="bg-primary/15 text-primary border-0">⭐ {m.rating}</Badge>
-                      </div>
-                    ))}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </Card>
               </TabsContent>
 
@@ -544,106 +599,118 @@ export default function Family() {
       </Dialog>
 
       {/* Match Dialog */}
-      <Dialog open={matchOpen} onOpenChange={setMatchOpen}>
+      <Dialog open={matchOpen} onOpenChange={(o) => { setMatchOpen(o); if (!o) resetMatchForm(); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Registrar datos del partido</DialogTitle>
-            <DialogDescription>Captura el resultado y estadísticas individuales.</DialogDescription>
+            <DialogDescription>Elige el partido y captura tus estadísticas individuales.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="m-date">Fecha</Label>
-                <Input
-                  id="m-date"
-                  placeholder="12 Abr"
-                  value={newMatch.date}
-                  onChange={(e) => setNewMatch({ ...newMatch, date: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="m-opp">Rival</Label>
-                <Input
-                  id="m-opp"
-                  placeholder="Atlético FC"
-                  value={newMatch.opponent}
-                  onChange={(e) => setNewMatch({ ...newMatch, opponent: e.target.value })}
-                />
-              </div>
+
+          {availableMatchesLoading ? (
+            <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" /> Cargando partidos...
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          ) : availableMatches.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">
+              No tienes partidos pendientes por registrar. Un nuevo partido aparecerá aquí en cuanto tu entrenador lo agende.
+            </p>
+          ) : (
+            <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="m-res">Resultado</Label>
+                <Label htmlFor="m-event">Partido</Label>
                 <select
-                  id="m-res"
+                  id="m-event"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  value={newMatch.result}
-                  onChange={(e) => setNewMatch({ ...newMatch, result: e.target.value })}
+                  value={newMatch.training_session_id}
+                  onChange={(e) => setNewMatch({ ...newMatch, training_session_id: e.target.value })}
                 >
-                  <option value="W">Victoria</option>
-                  <option value="D">Empate</option>
-                  <option value="L">Derrota</option>
+                  <option value="">Selecciona un partido</option>
+                  {availableMatches.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {eventFullDate(e.scheduled_at)} — {e.title}
+                    </option>
+                  ))}
                 </select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="m-sf">Goles a favor</Label>
-                <Input
-                  id="m-sf"
-                  type="number"
-                  min="0"
-                  value={newMatch.scoreFor}
-                  onChange={(e) => setNewMatch({ ...newMatch, scoreFor: e.target.value })}
-                />
+
+              {selectedMatch && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Fecha</Label>
+                    <Input disabled value={eventFullDate(selectedMatch.scheduled_at)} className="capitalize" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Rival</Label>
+                    <Input disabled value={selectedMatch.title} />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="m-sf">Goles a favor</Label>
+                  <Input
+                    id="m-sf"
+                    type="number"
+                    min="0"
+                    value={newMatch.scoreFor}
+                    onChange={(e) => setNewMatch({ ...newMatch, scoreFor: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="m-sa">Goles en contra</Label>
+                  <Input
+                    id="m-sa"
+                    type="number"
+                    min="0"
+                    value={newMatch.scoreAgainst}
+                    onChange={(e) => setNewMatch({ ...newMatch, scoreAgainst: e.target.value })}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="m-sa">Goles en contra</Label>
-                <Input
-                  id="m-sa"
-                  type="number"
-                  min="0"
-                  value={newMatch.scoreAgainst}
-                  onChange={(e) => setNewMatch({ ...newMatch, scoreAgainst: e.target.value })}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="m-g">Goles ⚽</Label>
+                  <Input
+                    id="m-g"
+                    type="number"
+                    min="0"
+                    value={newMatch.goals}
+                    onChange={(e) => setNewMatch({ ...newMatch, goals: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="m-a">Asistencias 🅰️</Label>
+                  <Input
+                    id="m-a"
+                    type="number"
+                    min="0"
+                    value={newMatch.assists}
+                    onChange={(e) => setNewMatch({ ...newMatch, assists: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="m-r">Rating ⭐</Label>
+                  <Input
+                    id="m-r"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="10"
+                    value={newMatch.rating}
+                    onChange={(e) => setNewMatch({ ...newMatch, rating: e.target.value })}
+                  />
+                </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="m-g">Goles ⚽</Label>
-                <Input
-                  id="m-g"
-                  type="number"
-                  min="0"
-                  value={newMatch.goals}
-                  onChange={(e) => setNewMatch({ ...newMatch, goals: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="m-a">Asistencias 🅰️</Label>
-                <Input
-                  id="m-a"
-                  type="number"
-                  min="0"
-                  value={newMatch.assists}
-                  onChange={(e) => setNewMatch({ ...newMatch, assists: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="m-r">Rating ⭐</Label>
-                <Input
-                  id="m-r"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="10"
-                  value={newMatch.rating}
-                  onChange={(e) => setNewMatch({ ...newMatch, rating: e.target.value })}
-                />
-              </div>
-            </div>
-          </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setMatchOpen(false)}>Cancelar</Button>
-            <Button onClick={handleAddMatch}>Guardar partido</Button>
+            <Button onClick={handleAddMatch} disabled={savingMatch || availableMatches.length === 0} className="gap-2">
+              {savingMatch && <Loader2 className="w-4 h-4 animate-spin" />}
+              {savingMatch ? "Guardando..." : "Guardar partido"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
