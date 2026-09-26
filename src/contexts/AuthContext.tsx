@@ -21,6 +21,7 @@ type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   setUser: (user: AuthUser | null) => void;
+  refreshUser: () => Promise<AuthUser | null>;
   signOut: () => Promise<void>;
 };
 
@@ -57,6 +58,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Trae el perfil actual del backend y actualiza el estado global — lo
+  // mismo que hace la carga inicial de la app, así cualquier dato que
+  // dependa del club (ej. `club_logo`) queda consistente sin necesitar un
+  // reload manual tras cambiarlo desde Configuración.
+  const refreshUser = async () => {
+    try {
+      const { data } = await api.get<AuthUser>("/auth/me/");
+      setUser(data);
+      return data;
+    } catch {
+      return null;
+    }
+  };
+
   const signOut = async () => {
     const refreshToken = localStorage.getItem(TOKEN_KEYS.refresh);
     try {
@@ -72,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, setUser, signOut }}>
+    <AuthContext.Provider value={{ user, loading, setUser, refreshUser, signOut }}>
       {children}
     </AuthContext.Provider>
   );

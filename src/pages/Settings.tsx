@@ -276,7 +276,7 @@ const STORAGE_KEY = "sf_club_settings";
 
 /** Configuración completa del club: solo para administradores/entrenadores. */
 function AdminClubSettings() {
-  const { user, setUser } = useAuth();
+  const { refreshUser } = useAuth();
   const [club, setClub] = useState<ClubData>(EMPTY_CLUB);
   const [clubLoading, setClubLoading] = useState(true);
   const [clubError, setClubError] = useState(false);
@@ -342,12 +342,13 @@ function AdminClubSettings() {
   const set = <K extends keyof ClubData>(k: K, v: ClubData[K]) => setClub((p) => ({ ...p, [k]: v }));
   const setExtra = <K extends keyof Extras>(k: K, v: Extras[K]) => setExtras((p) => ({ ...p, [k]: v }));
 
-  // Además del preview local, actualiza `AuthContext` (mismo estado global
-  // que consumen el sidebar y la barra móvil) para que el nuevo escudo se
-  // refleje en toda la app sin recargar la página.
-  const onLogoUploaded = (newLogo: string | null) => {
+  // Además del preview local, refresca `AuthContext` (mismo estado global
+  // que consumen el sidebar y la barra móvil) trayendo el usuario actual
+  // del backend — lo mismo que pasa en una recarga — para que el nuevo
+  // escudo se refleje en toda la app sin recargar la página.
+  const onLogoUploaded = async (newLogo: string | null) => {
     setClub((p) => ({ ...p, logo: newLogo }));
-    if (user) setUser({ ...user, club_logo: newLogo });
+    await refreshUser();
   };
 
   return (

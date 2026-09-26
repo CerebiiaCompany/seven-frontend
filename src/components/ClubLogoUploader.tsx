@@ -23,7 +23,7 @@ function validateLogoFile(file: File): string | null {
 interface ClubLogoUploaderProps {
   logoUrl: string | null;
   shortName: string;
-  onUploaded: (logoUrl: string | null) => void;
+  onUploaded: (logoUrl: string | null) => void | Promise<void>;
 }
 
 /** Uploader del escudo del club: click o drag & drop, preview inmediato y subida a `/club/settings/logo/`. */
@@ -54,7 +54,7 @@ export function ClubLogoUploader({ logoUrl, shortName, onUploaded }: ClubLogoUpl
       const { data } = await api.put<{ logo: string | null }>("/club/settings/logo/", formData, {
         headers: { "Content-Type": undefined },
       });
-      onUploaded(data.logo);
+      await onUploaded(data.logo);
       toast({ title: "Logo actualizado correctamente" });
     } catch (err) {
       const detail = isAxiosError(err)
