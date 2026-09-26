@@ -165,6 +165,7 @@ export default function Family() {
 
   const [matchStats, setMatchStats] = useState<PlayerMatchStat[]>([]);
   const [matchStatsLoading, setMatchStatsLoading] = useState(true);
+  const [selectedMatchStat, setSelectedMatchStat] = useState<PlayerMatchStat | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -420,7 +421,11 @@ export default function Family() {
                         const { day, month } = eventDayMonth(m.scheduled_at);
                         const outcome = m.score_for > m.score_against ? "V" : m.score_for === m.score_against ? "E" : "D";
                         return (
-                          <div key={m.id} className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/40 transition-colors">
+                          <div
+                            key={m.id}
+                            onClick={() => setSelectedMatchStat(m)}
+                            className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/40 transition-colors cursor-pointer"
+                          >
                             <div className="text-center w-14">
                               <p className="text-xs text-muted-foreground">{day} {month}</p>
                               <Badge variant={outcome === "V" ? "default" : "outline"} className="mt-1 text-xs">
@@ -435,6 +440,7 @@ export default function Family() {
                               </div>
                             </div>
                             <Badge className="bg-primary/15 text-primary border-0">⭐ {m.rating}</Badge>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                           </div>
                         );
                       })}
@@ -792,6 +798,57 @@ export default function Family() {
                     <p className="text-foreground/80">{selectedEvent.notes}</p>
                   </div>
                 )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Match Stat Detail Dialog */}
+      <Dialog open={!!selectedMatchStat} onOpenChange={(o) => !o && setSelectedMatchStat(null)}>
+        <DialogContent>
+          {selectedMatchStat && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedMatchStat.event_title}</DialogTitle>
+                <DialogDescription className="capitalize">{eventFullDate(selectedMatchStat.scheduled_at)}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Hora</span>
+                  <span className="font-medium">{eventTime(selectedMatchStat.scheduled_at)}</span>
+                </div>
+                {selectedMatchStat.location && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Lugar</span>
+                    <span className="font-medium">{selectedMatchStat.location}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Resultado del equipo</span>
+                  <Badge
+                    variant={selectedMatchStat.score_for > selectedMatchStat.score_against ? "default" : "outline"}
+                  >
+                    {selectedMatchStat.score_for > selectedMatchStat.score_against
+                      ? "Victoria"
+                      : selectedMatchStat.score_for === selectedMatchStat.score_against
+                        ? "Empate"
+                        : "Derrota"}{" "}
+                    {selectedMatchStat.score_for}-{selectedMatchStat.score_against}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Goles ⚽</span>
+                  <span className="font-medium">{selectedMatchStat.goals}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Asistencias 🅰️</span>
+                  <span className="font-medium">{selectedMatchStat.assists}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Calificación</span>
+                  <Badge className="bg-primary/15 text-primary border-0">⭐ {selectedMatchStat.rating}</Badge>
+                </div>
               </div>
             </>
           )}
