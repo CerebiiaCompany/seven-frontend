@@ -101,6 +101,19 @@
     padding-right: 2.25rem;
   }
 
+  /* Igual que con <select>: la flechita nativa de type="number" queda
+     blanca en varios navegadores/SO pese a `color-scheme: dark`. Se oculta
+     por completo — sigue aceptando solo números, eso lo da `type="number"`,
+     no las flechas. */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+
   .auth-grid {
     background-image:
       linear-gradient(hsl(var(--primary) / 0.055) 1px, transparent 1px),
