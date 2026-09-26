@@ -8,6 +8,7 @@ export type AuthUser = {
   last_name: string;
   full_name: string;
   phone_number: string;
+  photo: string | null;
   role: "admin" | "aux_admin" | "coach" | "player";
   is_staff: boolean;
   is_verified: boolean;

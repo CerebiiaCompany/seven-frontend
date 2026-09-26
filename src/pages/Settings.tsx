@@ -24,6 +24,7 @@ import { CategoriesPanel } from "@/components/CategoriesPanel";
 import { UsersPanel } from "@/components/UsersPanel";
 import { VenuesPanel } from "@/components/VenuesPanel";
 import { ClubLogoUploader } from "@/components/ClubLogoUploader";
+import { AvatarPhotoUploader } from "@/components/AvatarPhotoUploader";
 import { PasswordField } from "@/components/PasswordField";
 import { PasswordRequirementsChecklist } from "@/components/PasswordRequirementsChecklist";
 import { evaluatePassword } from "@/lib/passwordRequirements";
@@ -182,6 +183,7 @@ function ProfileField({ icon: Icon, label, value }: { icon: LucideIcon; label: s
 }
 
 function ProfileCard({ user }: { user: AuthUser }) {
+  const { refreshUser } = useAuth();
   const roleLabel = ROLE_LABELS[user.role];
   const initial = (user.full_name?.[0] || user.email[0]).toUpperCase();
 
@@ -190,9 +192,7 @@ function ProfileCard({ user }: { user: AuthUser }) {
       <Card className="p-5 sm:p-6 transition-shadow hover:shadow-md">
         <div className="flex flex-col sm:flex-row gap-5 sm:gap-6">
           <div className="flex sm:flex-col items-center gap-3 sm:gap-2 sm:w-28 flex-shrink-0">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-display font-bold flex-shrink-0">
-              {initial}
-            </div>
+            <AvatarPhotoUploader photoUrl={user.photo} initials={initial} onUploaded={refreshUser} />
             <Badge variant="secondary" className="text-[10px]">{roleLabel}</Badge>
           </div>
 
