@@ -31,9 +31,10 @@ import api from "@/lib/api";
 import { useAuth, type AuthUser } from "@/contexts/AuthContext";
 
 const ROLE_LABELS: Record<AuthUser["role"], string> = {
-  player: "Jugador",
+  admin: "Admin",
+  aux_admin: "Aux. Admin",
   coach: "Entrenador",
-  parent: "Padre/Tutor",
+  player: "Jugador",
 };
 
 /**
@@ -180,16 +181,42 @@ function ProfileField({ icon: Icon, label, value }: { icon: LucideIcon; label: s
   );
 }
 
-/**
- * Perfil de solo lectura para Padre/Jugador: en `/settings` solo ven sus
- * propios datos, nunca la configuración administrativa del club (esa queda
- * detrás de `IsCoachOrAdminRole` también en el backend — ocultar la pestaña
- * aquí es una capa de UX, no la única barrera).
- */
-function ProfileOnlySettings({ user }: { user: AuthUser }) {
-  const roleLabel = user.is_staff ? "Administrador" : ROLE_LABELS[user.role];
+function ProfileCard({ user }: { user: AuthUser }) {
+  const roleLabel = ROLE_LABELS[user.role];
   const initial = (user.full_name?.[0] || user.email[0]).toUpperCase();
 
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
+      <Card className="p-5 sm:p-6 transition-shadow hover:shadow-md">
+        <div className="flex flex-col sm:flex-row gap-5 sm:gap-6">
+          <div className="flex sm:flex-col items-center gap-3 sm:gap-2 sm:w-28 flex-shrink-0">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-display font-bold flex-shrink-0">
+              {initial}
+            </div>
+            <Badge variant="secondary" className="text-[10px]">{roleLabel}</Badge>
+          </div>
+
+          <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+            <ProfileField icon={UserIcon} label="Nombre" value={user.full_name} />
+            <ProfileField icon={Mail} label="Correo electrónico" value={user.email} />
+            <ProfileField icon={Phone} label="Teléfono" value={user.phone_number || "No registrado"} />
+            <ProfileField icon={Shield} label="Rol" value={roleLabel} />
+            <ProfileField icon={Building2} label="Club" value={user.club_name} />
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  );
+}
+
+/**
+ * Perfil de solo lectura para Jugador (también representa a los padres) y
+ * Aux. Admin: en `/settings` solo ven sus propios datos, nunca la
+ * configuración administrativa del club (esa queda detrás de `IsAdminRole`
+ * también en el backend — ocultar la pestaña aquí es una capa de UX, no la
+ * única barrera).
+ */
+function ProfileOnlySettings({ user }: { user: AuthUser }) {
   return (
     <DashboardLayout>
       <div className="w-full max-w-[960px] mx-auto p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 overflow-x-hidden">
@@ -198,29 +225,39 @@ function ProfileOnlySettings({ user }: { user: AuthUser }) {
           <p className="text-sm text-muted-foreground mt-1">Tu información personal</p>
         </div>
 
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-          <Card className="p-5 sm:p-6 transition-shadow hover:shadow-md">
-            <div className="flex flex-col sm:flex-row gap-5 sm:gap-6">
-              <div className="flex sm:flex-col items-center gap-3 sm:gap-2 sm:w-28 flex-shrink-0">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-display font-bold flex-shrink-0">
-                  {initial}
-                </div>
-                <Badge variant="secondary" className="text-[10px]">{roleLabel}</Badge>
-              </div>
-
-              <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                <ProfileField icon={UserIcon} label="Nombre" value={user.full_name} />
-                <ProfileField icon={Mail} label="Correo electrónico" value={user.email} />
-                <ProfileField icon={Phone} label="Teléfono" value={user.phone_number || "No registrado"} />
-                <ProfileField icon={Shield} label="Rol" value={roleLabel} />
-                <ProfileField icon={Building2} label="Club" value={user.club_name} />
-              </div>
-            </div>
-          </Card>
-        </motion.div>
+        <ProfileCard user={user} />
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: 0.05 }}>
           <SecurityPanel />
+        </motion.div>
+      </div>
+    </DashboardLayout>
+  );
+}
+
+/**
+ * Entrenador: su propio perfil + seguridad (igual que Jugador/Aux. Admin),
+ * más la revisión de deportistas pendientes ("gestionar deportistas de sus
+ * equipos"). Sin acceso al resto de la Configuración del club (datos del
+ * club, categorías, sedes, usuarios) — eso quedó exclusivo de Admin.
+ */
+function CoachSettings({ user }: { user: AuthUser }) {
+  return (
+    <DashboardLayout>
+      <div className="w-full max-w-[960px] mx-auto p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 overflow-x-hidden">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold">Mi perfil</h1>
+          <p className="text-sm text-muted-foreground mt-1">Tu información personal y los deportistas por revisar</p>
+        </div>
+
+        <ProfileCard user={user} />
+
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: 0.05 }}>
+          <SecurityPanel />
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: 0.1 }}>
+          <RegistrationsPanel />
         </motion.div>
       </div>
     </DashboardLayout>
@@ -274,7 +311,7 @@ const EXTRAS_DEFAULTS: Extras = {
 
 const STORAGE_KEY = "sf_club_settings";
 
-/** Configuración completa del club: solo para administradores/entrenadores. */
+/** Configuración completa del club: solo para el rol "admin". */
 function AdminClubSettings() {
   const { refreshUser } = useAuth();
   const [club, setClub] = useState<ClubData>(EMPTY_CLUB);
@@ -482,16 +519,16 @@ function AdminClubSettings() {
 }
 
 /**
- * Padre/Jugador → solo su perfil de solo lectura.
- * Admin/entrenador → configuración completa del club, sin cambios.
+ * Admin → configuración completa del club.
+ * Entrenador → su perfil + revisión de deportistas pendientes.
+ * Jugador (también padres) / Aux. Admin → solo su perfil de solo lectura.
  */
 export default function SettingsPage() {
   const { user } = useAuth();
   if (!user) return null;
 
-  if (!user.is_staff && (user.role === "player" || user.role === "parent")) {
-    return <ProfileOnlySettings user={user} />;
-  }
-
-  return <AdminClubSettings />;
+  if (user.role === "admin") return <AdminClubSettings />;
+  if (user.role === "coach") return <CoachSettings user={user} />;
+  // player y aux_admin: solo su propio perfil, sin panel administrativo.
+  return <ProfileOnlySettings user={user} />;
 }

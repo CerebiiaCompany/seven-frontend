@@ -5,36 +5,45 @@ import type { AuthUser } from "@/contexts/AuthContext";
  * el guard de rutas, para que ocultar una opción del menú y bloquear su ruta
  * sean siempre la misma regla (una sola fuente de verdad).
  *
- * - Admin (user.is_staff): acceso completo.
- * - Entrenador (role === "coach"): todo excepto Portal Familia.
- * - Jugador/Padre (role === "player" | "parent"): únicamente Portal Familia.
- * - Configuración queda siempre disponible para cualquier rol autenticado.
+ * Los cuatro roles oficiales (no existe rol "padre" — los padres usan el
+ * mismo rol y flujo que los jugadores):
+ * - admin      → acceso total a todas las pantallas.
+ * - coach      → todo lo deportivo (deportistas, entrenadores, calendario,
+ *                asistencia, rendimiento, squad builder); nada de
+ *                Configuración, Pagos, Formularios ni Contenido.
+ * - aux_admin  → únicamente Pagos, Formularios y Contenido.
+ * - player     → únicamente Portal Familia (también representa a los padres).
+ *
+ * Configuración queda siempre disponible para cualquier rol autenticado; lo
+ * que cambia por rol es qué ve dentro de esa pantalla (ver `Settings.tsx`).
  */
 
 export const FAMILY_PATH = "/family";
 export const SETTINGS_PATH = "/settings";
 
-export function isAdmin(user: AuthUser | null): boolean {
-  return !!user?.is_staff;
-}
+const COACH_PATHS = new Set([
+  "/", "/players", "/coaches", "/calendar", "/attendance", "/performance", "/gamification",
+]);
 
-export function isCoach(user: AuthUser | null): boolean {
-  return !!user && !isAdmin(user) && user.role === "coach";
-}
+const AUX_ADMIN_PATHS = new Set(["/payments", "/forms", "/content"]);
+
+const PLAYER_PATHS = new Set([FAMILY_PATH]);
 
 /** Ruta a la que se redirige a un usuario cuando aterriza en una página que no puede ver. */
 export function homePathFor(user: AuthUser | null): string {
-  if (isAdmin(user) || isCoach(user)) return "/";
+  if (!user) return "/login";
+  if (user.role === "admin" || user.role === "coach") return "/";
+  if (user.role === "aux_admin") return "/payments";
   return FAMILY_PATH;
 }
 
 export function canAccessPath(user: AuthUser | null, path: string): boolean {
   if (!user) return false;
   if (path === SETTINGS_PATH) return true;
-  if (isAdmin(user)) return true;
-  if (user.role === "coach") return path !== FAMILY_PATH;
-  // jugador o padre/tutor: solo Portal Familia
-  return path === FAMILY_PATH;
+  if (user.role === "admin") return true;
+  if (user.role === "coach") return COACH_PATHS.has(path);
+  if (user.role === "aux_admin") return AUX_ADMIN_PATHS.has(path);
+  return PLAYER_PATHS.has(path); // player
 }
 
 export function filterNavSections<T extends { items: { path: string }[] }>(

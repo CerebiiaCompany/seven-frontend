@@ -116,7 +116,7 @@ export function CategoriesPanel() {
   if (denied) {
     return (
       <Card className="p-6 text-sm text-muted-foreground">
-        Tu cuenta no tiene permiso para gestionar categorías. Pide al administrador del club que te asigne el rol de administrador o entrenador.
+        Tu cuenta no tiene permiso para gestionar categorías. Pide al administrador del club que te asigne el rol de administrador.
       </Card>
     );
   }

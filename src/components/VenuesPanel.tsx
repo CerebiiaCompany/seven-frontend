@@ -110,7 +110,7 @@ export function VenuesPanel() {
   if (denied) {
     return (
       <Card className="p-6 text-sm text-muted-foreground">
-        Tu cuenta no tiene permiso para gestionar sedes. Pide al administrador del club que te asigne el rol de administrador o entrenador.
+        Tu cuenta no tiene permiso para gestionar sedes. Pide al administrador del club que te asigne el rol de administrador.
       </Card>
     );
   }

@@ -15,8 +15,9 @@ import { Copy, Plus, Trash2, Users, UserX } from "lucide-react";
 // Color por rol (mismos tokens `--kpi-*` que usan los KPIs del dashboard),
 // para poder identificar el rol de un vistazo en los chips y las filas.
 const ROLE_COLOR_VAR: Record<string, string> = {
+  admin: "--kpi-red",
+  aux_admin: "--kpi-amber",
   coach: "--kpi-blue",
-  parent: "--kpi-amber",
   player: "--kpi-green",
 };
 const roleColorVar = (role: string) => ROLE_COLOR_VAR[role] ?? "--primary";
@@ -28,7 +29,6 @@ interface AdminUser {
   role: string;
   role_display: string;
   is_active: boolean;
-  is_staff: boolean;
   initial: string;
 }
 
@@ -46,9 +46,10 @@ interface NewUserCredentials {
 const emptyInvite = { first_name: "", last_name: "", email: "", phone_number: "", role: "" };
 
 // El registro público (`/auth/register/`) exige datos de deportista + acudiente
-// cuando role === "player" — esta pantalla invita entrenadores/padres, no
-// deportistas (esos se registran desde el flujo público con esos datos).
-const INVITABLE_ROLES = new Set(["coach", "parent"]);
+// cuando role === "player" — esta pantalla invita a los otros tres roles
+// (entrenador, admin, aux. admin), no deportistas (esos se registran desde
+// el flujo público con esos datos).
+const INVITABLE_ROLES = new Set(["coach", "admin", "aux_admin"]);
 
 const randomPassword = () => crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 
@@ -140,7 +141,6 @@ export function UsersPanel() {
           role: data.role,
           role_display: roles.find((r) => r.value === data.role)?.label ?? data.role,
           is_active: true,
-          is_staff: false,
           initial: (data.full_name?.[0] || data.email[0]).toUpperCase(),
         },
         ...prev,
@@ -181,7 +181,7 @@ export function UsersPanel() {
   if (denied) {
     return (
       <Card className="p-6 text-sm text-muted-foreground">
-        Tu cuenta no tiene permiso para administrar usuarios. Pide al administrador del club que te asigne el rol de administrador o entrenador.
+        Tu cuenta no tiene permiso para administrar usuarios. Pide al administrador del club que te asigne el rol de administrador.
       </Card>
     );
   }
@@ -351,7 +351,6 @@ export function UsersPanel() {
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium truncate">{u.full_name || "Sin nombre"}</p>
                       {!u.is_active && <Badge variant="outline" className="text-[10px]">Inactivo</Badge>}
-                      {u.is_staff && <Badge variant="secondary" className="text-[10px]">Admin</Badge>}
                     </div>
                     <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                   </div>
