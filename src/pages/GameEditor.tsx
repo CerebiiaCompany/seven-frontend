@@ -8,7 +8,7 @@ import html2canvas from "html2canvas";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { FieldDraggable } from "@/components/FieldDraggable";
 import {
-  ArrowLeft, Save, Download, Undo2, Redo2, Trash2, Eraser, Settings2, Minus, Plus, X,
+  ArrowLeft, Save, Download, Undo2, Redo2, Trash2, Eraser, Settings2, Plus, X, Pencil,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -385,7 +385,6 @@ const GameEditor = () => {
       setScene((s) => ({ ...s, lines: [...s.lines, line] }));
     }
     setLineDraft(null);
-    setDrawingLine(false);
   };
 
   const moveLineEndpoint = (lineId: string, end: "1" | "2", pos: { x: number; y: number }) => {
@@ -531,7 +530,7 @@ const GameEditor = () => {
             className="gap-2"
             onClick={() => { setDrawingLine((v) => !v); setLineDraft(null); setSelectedId(null); }}
           >
-            <Minus className="w-4 h-4" /> {drawingLine ? "Arrastra sobre la cancha..." : "Línea"}
+            <Pencil className="w-4 h-4" /> {drawingLine ? "Dibujando… (clic en el lápiz para terminar)" : "Línea"}
           </Button>
           <Button variant="outline" size="icon" onClick={deleteSelected} disabled={!selectedId} title="Borrar seleccionado">
             <Trash2 className="w-4 h-4" />
