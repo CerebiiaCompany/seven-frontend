@@ -502,7 +502,7 @@ const GameEditor = () => {
         </motion.button>
 
         {/* Header */}
-        <div className="glass-card p-4 mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="glass-card p-3 sm:p-4 mb-3 sm:mb-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <Input value={name} onChange={(e) => setName(e.target.value)} className="max-w-xs" />
           <div className="flex items-center gap-1.5">
             {board.category && <Badge variant="secondary">{board.category.name}</Badge>}
@@ -522,25 +522,31 @@ const GameEditor = () => {
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
           <Button variant="outline" size="icon" onClick={undo} disabled={!past.length} title="Deshacer"><Undo2 className="w-4 h-4" /></Button>
           <Button variant="outline" size="icon" onClick={redo} disabled={!future.length} title="Rehacer"><Redo2 className="w-4 h-4" /></Button>
           <Button
             variant={drawingLine ? "default" : "outline"}
-            className="gap-2"
+            className="gap-1.5 sm:gap-2"
             onClick={() => { setDrawingLine((v) => !v); setLineDraft(null); setSelectedId(null); }}
           >
-            <Pencil className="w-4 h-4" /> {drawingLine ? "Dibujando… (clic en el lápiz para terminar)" : "Línea"}
+            <Pencil className="w-4 h-4" />
+            {drawingLine ? (
+              <>
+                <span className="sm:hidden">Dibujando…</span>
+                <span className="hidden sm:inline">Dibujando… (clic en el lápiz para terminar)</span>
+              </>
+            ) : "Línea"}
           </Button>
           <Button variant="outline" size="icon" onClick={deleteSelected} disabled={!selectedId} title="Borrar seleccionado">
             <Trash2 className="w-4 h-4" />
           </Button>
-          <Button variant="outline" className="gap-2" onClick={clearAll}>
-            <Eraser className="w-4 h-4" /> Limpiar todo
+          <Button variant="outline" className="gap-1.5 sm:gap-2" onClick={clearAll} title="Limpiar todo">
+            <Eraser className="w-4 h-4" /> <span className="hidden sm:inline">Limpiar todo</span><span className="sm:hidden">Limpiar</span>
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
           {/* Field */}
           <div className="lg:col-span-2 rounded-2xl overflow-hidden relative" style={{ background: "#1a1a1a" }}>
             <div className="relative w-full" style={{ paddingBottom: "140%" }}>
@@ -662,9 +668,9 @@ const GameEditor = () => {
           </div>
 
           {/* Right panel */}
-          <div className="space-y-4">
+          <div className="space-y-2 sm:space-y-3 lg:space-y-4">
             {(selectedLine || drawingLine) && (
-              <div className="glass-card-elevated p-4 space-y-3">
+              <div className="glass-card-elevated p-2.5 sm:p-4 space-y-2 sm:space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                     {selectedLine ? "Línea seleccionada" : "Próxima línea"}
@@ -676,15 +682,19 @@ const GameEditor = () => {
             )}
 
             {selectedPlayerToken && (
-              <div className="glass-card-elevated p-4 space-y-3">
+              <div className="glass-card-elevated p-2.5 sm:p-4 space-y-2 sm:space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{selectedPlayerToken.name}</p>
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedId(null)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
-                <div className="flex gap-2">
-                  <Input value={selectedPlayerToken.number} onChange={(e) => updatePlayerToken(selectedPlayerToken.id, { number: e.target.value.slice(0, 2) })} className="w-16" placeholder="#" />
-                  <Button size="sm" variant={selectedPlayerToken.team === "A" ? "default" : "outline"} className="flex-1" onClick={() => updatePlayerToken(selectedPlayerToken.id, { team: "A" })}>Equipo A</Button>
-                  <Button size="sm" variant={selectedPlayerToken.team === "B" ? "default" : "outline"} className="flex-1" onClick={() => updatePlayerToken(selectedPlayerToken.id, { team: "B" })}>Equipo B</Button>
+                <div className="flex gap-1.5 sm:gap-2">
+                  <Input value={selectedPlayerToken.number} onChange={(e) => updatePlayerToken(selectedPlayerToken.id, { number: e.target.value.slice(0, 2) })} className="w-14" placeholder="#" />
+                  <Button size="sm" variant={selectedPlayerToken.team === "A" ? "default" : "outline"} className="flex-1 px-1" onClick={() => updatePlayerToken(selectedPlayerToken.id, { team: "A" })}>
+                    <span className="sm:hidden">A</span><span className="hidden sm:inline">Equipo A</span>
+                  </Button>
+                  <Button size="sm" variant={selectedPlayerToken.team === "B" ? "default" : "outline"} className="flex-1 px-1" onClick={() => updatePlayerToken(selectedPlayerToken.id, { team: "B" })}>
+                    <span className="sm:hidden">B</span><span className="hidden sm:inline">Equipo B</span>
+                  </Button>
                 </div>
               </div>
             )}
@@ -695,17 +705,17 @@ const GameEditor = () => {
                 <TabsTrigger value="objetos" className="flex-1">Objetos</TabsTrigger>
               </TabsList>
               <TabsContent value="jugadores">
-                <div className="glass-card divide-y divide-border max-h-[420px] overflow-y-auto">
+                <div className="glass-card divide-y divide-border max-h-[45vh] sm:max-h-[420px] overflow-y-auto">
                   {roster.length === 0 ? (
-                    <p className="p-4 text-xs text-muted-foreground">No hay jugadores confirmados en este grupo.</p>
+                    <p className="p-3 text-xs text-muted-foreground">No hay jugadores confirmados en este grupo.</p>
                   ) : (
                     roster.map((p) => (
-                      <div key={p.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-foreground">{p.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{p.position}</p>
-                        </div>
-                        <Button size="icon" variant="outline" className="h-7 w-7 flex-shrink-0" aria-label={`Agregar ${p.name}`} onClick={() => addPlayerFromRoster(p)}>
+                      <div key={p.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-sm">
+                        <p className="min-w-0 truncate">
+                          <span className="font-medium text-foreground">{p.name}</span>{" "}
+                          <span className="text-[10px] text-muted-foreground">{p.position}</span>
+                        </p>
+                        <Button size="icon" variant="outline" className="h-6 w-6 flex-shrink-0" aria-label={`Agregar ${p.name}`} onClick={() => addPlayerFromRoster(p)}>
                           <Plus className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -714,10 +724,10 @@ const GameEditor = () => {
                 </div>
               </TabsContent>
               <TabsContent value="objetos">
-                <div className="glass-card grid grid-cols-2 gap-2 p-3">
+                <div className="glass-card grid grid-cols-3 sm:grid-cols-2 gap-1.5 p-2 sm:p-3">
                   {OBJ_CATALOG.map((o) => (
-                    <button key={o.kind} onClick={() => addMarker(o.kind)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg border text-xs hover:border-primary/50 hover:bg-muted/40 transition-colors">
+                    <button key={o.kind} onClick={() => addMarker(o.kind)} title={o.label}
+                      className="flex flex-col sm:flex-row items-center gap-0.5 sm:gap-2 px-1.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border text-[10px] sm:text-xs hover:border-primary/50 hover:bg-muted/40 transition-colors">
                       <span className="text-base">{o.emoji}</span>
                       <span className="truncate">{o.label}</span>
                     </button>
