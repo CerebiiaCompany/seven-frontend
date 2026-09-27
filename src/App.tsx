@@ -12,6 +12,8 @@ import Content from "./pages/Content.tsx";
 import Coaches from "./pages/Coaches.tsx";
 import Performance from "./pages/Performance.tsx";
 import Gamification from "./pages/Gamification.tsx";
+import GameSetup from "./pages/GameSetup.tsx";
+import GameEditor from "./pages/GameEditor.tsx";
 import CalendarPage from "./pages/Calendar.tsx";
 import Attendance from "./pages/Attendance.tsx";
 import Reports from "./pages/Reports.tsx";
@@ -46,6 +48,8 @@ const App = () => (
             <Route path="/coaches" element={<ProtectedRoute><Coaches /></ProtectedRoute>} />
             <Route path="/performance" element={<ProtectedRoute><Performance /></ProtectedRoute>} />
             <Route path="/gamification" element={<ProtectedRoute><Gamification /></ProtectedRoute>} />
+            <Route path="/gamification/nuevo" element={<ProtectedRoute><GameSetup /></ProtectedRoute>} />
+            <Route path="/gamification/:id" element={<ProtectedRoute><GameEditor /></ProtectedRoute>} />
             <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
             <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />

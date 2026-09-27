@@ -1,4 +1,6 @@
-import { ReactNode, RefObject, useRef, useState } from "react";
+import { ReactNode, RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { isAxiosError } from "axios";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { motion, MotionProps, PanInfo, useMotionValue } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
@@ -6,12 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Gamepad2, Star, Shield, Zap, Crown, Flame, Medal,
-  Download, Trash2, RotateCcw, Move, Plus,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Gamepad2, Shield, Medal,
+  Download, Trash2, RotateCcw, Move, Plus, Copy, ImageOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { type BoardListItem, listBoards, duplicateBoard, deleteBoard } from "./Games";
 
 const formations = ["4-3-3", "4-4-2", "3-5-2", "4-2-3-1"];
 
@@ -101,19 +108,6 @@ const objCatalog: { kind: ObjKind; label: string; emoji: string }[] = [
 
 interface FieldObject { id: number; kind: ObjKind; emoji: string; label: string; x: number; y: number }
 
-const ratingColor = (r: number) => {
-  if (r >= 85) return { bg: "hsl(var(--primary))", text: "hsl(0 0% 100%)" };
-  if (r >= 78) return { bg: "hsl(var(--kpi-blue))", text: "hsl(0 0% 100%)" };
-  if (r >= 72) return { bg: "hsl(var(--kpi-amber))", text: "hsl(0 0% 100%)" };
-  return { bg: "hsl(var(--muted-foreground))", text: "hsl(0 0% 100%)" };
-};
-
-const levelIcon = (l: number) => {
-  if (l >= 18) return <Crown className="w-3 h-3 text-[hsl(var(--kpi-amber))]" />;
-  if (l >= 14) return <Flame className="w-3 h-3 text-destructive" />;
-  return <Star className="w-3 h-3 text-muted-foreground" />;
-};
-
 const clamp = (n: number) => Math.min(97, Math.max(3, n));
 
 interface FieldDraggableProps {
@@ -188,6 +182,51 @@ const Gamification = () => {
   const [sessionName, setSessionName] = useState("Sesión de entrenamiento");
   const [exporting, setExporting] = useState(false);
   const fieldRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
+  // Historial de "Juegos" (pizarra táctica guardada) — pestaña "lineup".
+  const [boards, setBoards] = useState<BoardListItem[]>([]);
+  const [boardsLoading, setBoardsLoading] = useState(true);
+  const [boardsDenied, setBoardsDenied] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+
+  const loadBoards = useCallback(async () => {
+    setBoardsLoading(true);
+    try {
+      const { results } = await listBoards();
+      setBoardsDenied(false);
+      setBoards(results);
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 403) setBoardsDenied(true);
+    } finally {
+      setBoardsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadBoards(); }, [loadBoards]);
+
+  const handleDuplicateBoard = async (id: string) => {
+    setDuplicatingId(id);
+    try {
+      await duplicateBoard(id);
+      toast.success("Juego duplicado");
+      loadBoards();
+    } catch {
+      toast.error("No se pudo duplicar el juego");
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
+  const handleDeleteBoard = async (id: string) => {
+    try {
+      await deleteBoard(id);
+      toast.success("Juego eliminado");
+      setBoards((prev) => prev.filter((b) => b.id !== id));
+    } catch {
+      toast.error("No se pudo eliminar el juego");
+    }
+  };
 
   const teamOverall = Math.round(players.reduce((a, p) => a + p.rating, 0) / players.length);
   const leaderboard = [...players].sort((a, b) => b.xp - a.xp);
@@ -289,23 +328,117 @@ const Gamification = () => {
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
           <Tabs value={mode} onValueChange={(v) => setMode(v as "lineup" | "training")}>
             <TabsList>
-              <TabsTrigger value="lineup">Alineación</TabsTrigger>
+              <TabsTrigger value="lineup">Juegos</TabsTrigger>
               <TabsTrigger value="training">Entrenamiento</TabsTrigger>
             </TabsList>
           </Tabs>
-          <div className="flex gap-2 overflow-x-auto">
-            {formations.map((f) => (
-              <button key={f} onClick={() => applyFormation(f)}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${formation === f ? "bg-primary text-primary-foreground shadow-md" : "glass-card text-muted-foreground hover:text-foreground"}`}>
-                {f}
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] text-muted-foreground flex items-center gap-1 sm:ml-auto">
-            <Move className="w-3 h-3" /> Arrastra jugadores y objetos sobre la cancha
-          </p>
+          {mode === "training" && (
+            <>
+              <div className="flex gap-2 overflow-x-auto">
+                {formations.map((f) => (
+                  <button key={f} onClick={() => applyFormation(f)}
+                    className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${formation === f ? "bg-primary text-primary-foreground shadow-md" : "glass-card text-muted-foreground hover:text-foreground"}`}>
+                    {f}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1 sm:ml-auto">
+                <Move className="w-3 h-3" /> Arrastra jugadores y objetos sobre la cancha
+              </p>
+            </>
+          )}
         </div>
 
+        {mode !== "training" ? (
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-muted-foreground">
+                {boardsLoading ? "Cargando juegos..." : `${boards.length} juego(s) guardado(s)`}
+              </p>
+              <Button className="gap-2" onClick={() => navigate("/gamification/nuevo")}>
+                <Plus className="w-4 h-4" /> Crear
+              </Button>
+            </div>
+
+            {boardsDenied ? (
+              <div className="glass-card p-6 text-sm text-muted-foreground">
+                Tu cuenta no tiene permiso para ver "Juegos". Pide al administrador del club que te asigne el rol de entrenador o administrador.
+              </div>
+            ) : boardsLoading ? (
+              <div className="glass-card p-10 text-center text-sm text-muted-foreground">Cargando juegos...</div>
+            ) : boards.length === 0 ? (
+              <div className="glass-card p-10 text-center">
+                <Gamepad2 className="w-10 h-10 mx-auto text-muted-foreground/30 mb-3" />
+                <p className="text-sm font-medium text-foreground">Todavía no hay juegos guardados</p>
+                <p className="text-xs text-muted-foreground mt-1 mb-4">Crea el primero eligiendo una categoría y un grupo.</p>
+                <Button className="gap-2" onClick={() => navigate("/gamification/nuevo")}>
+                  <Plus className="w-4 h-4" /> Crear
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {boards.map((board, i) => (
+                  <motion.div
+                    key={board.id}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.03 }}
+                    className="glass-card overflow-hidden group"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/gamification/${board.id}`)}
+                      className="block w-full aspect-[4/3] bg-muted/40 overflow-hidden"
+                    >
+                      {board.thumbnail ? (
+                        <img src={board.thumbnail} alt={board.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <ImageOff className="w-8 h-8 text-muted-foreground/30" />
+                        </div>
+                      )}
+                    </button>
+                    <div className="p-3">
+                      <button type="button" onClick={() => navigate(`/gamification/${board.id}`)} className="text-left w-full">
+                        <p className="text-sm font-semibold text-foreground truncate">{board.name}</p>
+                      </button>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        {board.category && <Badge variant="secondary" className="text-[10px]">{board.category.name}</Badge>}
+                        {board.group && <Badge variant="secondary" className="text-[10px]">{board.group.name}</Badge>}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-3">
+                        <Button
+                          variant="outline" size="sm" className="gap-1.5 flex-1"
+                          disabled={duplicatingId === board.id}
+                          onClick={() => handleDuplicateBoard(board.id)}
+                        >
+                          <Copy className="w-3.5 h-3.5" /> Duplicar
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Eliminar "{board.name}"?</AlertDialogTitle>
+                              <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteBoard(board.id)}>Eliminar</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Football Field */}
           <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }}
@@ -391,88 +524,37 @@ const Gamification = () => {
 
           {/* Right Panel */}
           <div className="space-y-4">
-            {mode === "training" ? (
-              <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="glass-card-elevated p-4 space-y-4">
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Nombre de la actividad</p>
-                  <Input value={sessionName} onChange={(e) => setSessionName(e.target.value)} />
+            <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="glass-card-elevated p-4 space-y-4">
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Nombre de la actividad</p>
+                <Input value={sessionName} onChange={(e) => setSessionName(e.target.value)} />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Material</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {objCatalog.map((o) => (
+                    <button key={o.kind} onClick={() => addObject(o.kind)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg border text-xs hover:border-primary/50 hover:bg-muted/40 transition-colors">
+                      <span className="text-base">{o.emoji}</span>
+                      <span className="truncate">{o.label}</span>
+                      <Plus className="w-3 h-3 ml-auto text-muted-foreground" />
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Material</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {objCatalog.map((o) => (
-                      <button key={o.kind} onClick={() => addObject(o.kind)}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg border text-xs hover:border-primary/50 hover:bg-muted/40 transition-colors">
-                        <span className="text-base">{o.emoji}</span>
-                        <span className="truncate">{o.label}</span>
-                        <Plus className="w-3 h-3 ml-auto text-muted-foreground" />
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-2">Arrastra los elementos en la cancha. Doble clic para quitarlos.</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="gap-1 flex-1" onClick={() => setObjects([])}>
-                    <Trash2 className="w-3.5 h-3.5" /> Limpiar
-                  </Button>
-                  <Button variant="outline" size="sm" className="gap-1 flex-1" onClick={() => applyFormation("4-3-3")}>
-                    <RotateCcw className="w-3.5 h-3.5" /> Reiniciar
-                  </Button>
-                </div>
-                <Button className="w-full gap-2" onClick={exportPDF} disabled={exporting}>
-                  <Download className="w-4 h-4" /> {exporting ? "Generando..." : "Descargar PDF"}
+                <p className="text-[10px] text-muted-foreground mt-2">Arrastra los elementos en la cancha. Doble clic para quitarlos.</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="gap-1 flex-1" onClick={() => setObjects([])}>
+                  <Trash2 className="w-3.5 h-3.5" /> Limpiar
                 </Button>
-              </motion.div>
-            ) : (
-              <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}
-                className="glass-card-elevated overflow-hidden">
-                {selectedPlayer ? (
-                  <>
-                    <div className="p-4 text-center" style={{ background: `linear-gradient(135deg, ${ratingColor(selectedPlayer.rating).bg}22, transparent)` }}>
-                      <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center text-2xl font-bold shadow-lg border-[3px] mb-2"
-                        style={{ background: "#3b82f6", color: "#fff", borderColor: "#60a5fa" }}>
-                        {selectedPlayer.num}
-                      </div>
-                      <h3 className="font-bold text-foreground">{selectedPlayer.name}</h3>
-                      <div className="flex items-center justify-center gap-2 mt-1">
-                        <Badge variant="secondary" className="text-[10px]">{selectedPlayer.position}</Badge>
-                        <Badge className="text-[10px] bg-primary/20 text-primary border-0">OVR {selectedPlayer.rating}</Badge>
-                      </div>
-                      <div className="flex items-center justify-center gap-3 mt-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">{levelIcon(selectedPlayer.level)} Nv.{selectedPlayer.level}</span>
-                        <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-[hsl(var(--kpi-amber))]" />{selectedPlayer.xp} XP</span>
-                      </div>
-                      <div className="mt-3 mx-4">
-                        <div className="h-2 rounded-full bg-muted/50 overflow-hidden">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${(selectedPlayer.xp % 200) / 2}%` }}
-                            className="h-full rounded-full" style={{ background: "hsl(var(--kpi-amber))" }} />
-                        </div>
-                        <p className="text-[9px] text-muted-foreground mt-1">{selectedPlayer.xp % 200}/200 XP al siguiente nivel</p>
-                      </div>
-                    </div>
-                    <div className="p-4 space-y-2">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Atributos</p>
-                      {Object.entries(selectedPlayer.stats).map(([key, val]) => (
-                        <div key={key} className="flex items-center gap-2">
-                          <span className="text-[11px] text-muted-foreground capitalize w-16">{key}</span>
-                          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                            <motion.div initial={{ width: 0 }} animate={{ width: `${val}%` }}
-                              className="h-full rounded-full" style={{ background: val >= 80 ? "hsl(var(--primary))" : val >= 70 ? "hsl(var(--kpi-blue))" : "hsl(var(--kpi-amber))" }} />
-                          </div>
-                          <span className="text-[11px] font-bold text-foreground w-6 text-right">{val}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div className="p-8 text-center">
-                    <Gamepad2 className="w-10 h-10 mx-auto text-muted-foreground/30 mb-3" />
-                    <p className="text-sm text-muted-foreground">Selecciona un jugador</p>
-                    <p className="text-[11px] text-muted-foreground/60">Haz clic en la cancha para ver detalles</p>
-                  </div>
-                )}
-              </motion.div>
-            )}
+                <Button variant="outline" size="sm" className="gap-1 flex-1" onClick={() => applyFormation("4-3-3")}>
+                  <RotateCcw className="w-3.5 h-3.5" /> Reiniciar
+                </Button>
+              </div>
+              <Button className="w-full gap-2" onClick={exportPDF} disabled={exporting}>
+                <Download className="w-4 h-4" /> {exporting ? "Generando..." : "Descargar PDF"}
+              </Button>
+            </motion.div>
 
             {/* Leaderboard */}
             <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
@@ -500,6 +582,7 @@ const Gamification = () => {
             </motion.div>
           </div>
         </div>
+        )}
       </div>
     </DashboardLayout>
   );
