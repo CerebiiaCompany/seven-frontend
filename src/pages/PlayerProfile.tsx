@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { UserAvatar } from "@/components/UserAvatar";
 import { toast } from "@/hooks/use-toast";
 
 type PlayerVideo = { id: string; name: string; url: string; createdAt: string };
@@ -20,7 +21,7 @@ type PlayerVideo = { id: string; name: string; url: string; createdAt: string };
 const playerData = {
   id: 1, name: "Juan Pérez", age: 16, category: "Sub-17", group: "", position: "Delantero",
   rating: 82, status: "active", goals: 12, assists: 8, minutes: 1240,
-  birthdate: "2010-03-15", city: "Bogotá",
+  birthdate: "2010-03-15", city: "Bogotá", photo: null as string | null,
   observations: [
     { date: "15 Mar", text: "Excelente desempeño en práctica táctica. Mejora notable en la lectura de juego." },
     { date: "10 Mar", text: "Debe mejorar pie izquierdo. Buen trabajo en definición." },
@@ -80,9 +81,9 @@ const PlayerProfile = () => {
         category: real.category,
         group: real.group,
         position: real.position,
+        photo: real.photo,
       }
     : playerData;
-  const initials = player.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   const positionHistory: PositionEntry[] = real?.positionHistory ?? [];
   const videosKey = `sf_player_videos_${id || "default"}`;
   const [videos, setVideos] = useState<PlayerVideo[]>([]);
@@ -147,9 +148,11 @@ const PlayerProfile = () => {
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6 mb-6">
           <div className="flex flex-col sm:flex-row items-start gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-xl font-display font-bold text-primary">
-              {initials}
-            </div>
+            <UserAvatar
+              photoUrl={player.photo}
+              name={player.name}
+              className="w-16 h-16 rounded-2xl text-xl font-display text-primary"
+            />
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-2xl font-display font-bold text-foreground">{player.name}</h1>

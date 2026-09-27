@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { UserAvatar } from "@/components/UserAvatar";
 import api from "@/lib/api";
 
 // ---------------------------------------------------------------------------
@@ -38,6 +39,7 @@ export interface Player {
   email?: string;
   guardian?: string;
   city?: string;
+  photo?: string | null;
   positionHistory?: PositionEntry[];
 }
 
@@ -45,6 +47,7 @@ interface ApiPlayer {
   id: string;
   full_name: string;
   email: string;
+  photo: string | null;
   phone_number: string;
   birth_date: string;
   document_id: string;
@@ -102,6 +105,7 @@ const mapApiPlayer = (r: ApiPlayer): Player => ({
   assists: 0,
   phone: r.phone_number,
   email: r.email,
+  photo: r.photo,
   guardian: r.guardian_name,
   city: r.city,
 });
@@ -258,9 +262,11 @@ const Players = () => {
                     >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                            {player.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                          </div>
+                          <UserAvatar
+                            photoUrl={player.photo}
+                            name={player.name}
+                            className="w-8 h-8 rounded-full text-xs text-primary"
+                          />
                           <div>
                             <p className="text-sm font-medium text-foreground">{player.name}</p>
                             <p className="text-xs text-muted-foreground">{player.age} años</p>

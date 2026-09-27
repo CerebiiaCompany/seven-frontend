@@ -13,21 +13,15 @@ import {
   GraduationCap, Flame, Shield
 } from "lucide-react";
 import api from "@/lib/api";
+import { UserAvatar } from "@/components/UserAvatar";
 
 interface ApiCoach {
   id: string;
   full_name: string;
   email: string;
+  photo: string | null;
   categories: string[];
 }
-
-const initialsOf = (fullName: string) =>
-  fullName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "?";
 
 // --- Mock Data (metodologías, ciclos y ejercicios: aún no hay módulo real en el backend) ---
 
@@ -194,9 +188,12 @@ const Coaches = () => {
           ) : (
             coaches.map((c) => (
               <div key={c.id} className="glass-card p-5 flex items-start gap-4">
-                <div className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold text-primary-foreground flex-shrink-0" style={{ background: "hsl(var(--primary))" }}>
-                  {initialsOf(c.full_name)}
-                </div>
+                <UserAvatar
+                  photoUrl={c.photo}
+                  name={c.full_name}
+                  className="w-11 h-11 rounded-full text-sm text-primary-foreground"
+                  style={{ background: "hsl(var(--primary))" }}
+                />
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-foreground truncate">{c.full_name}</p>
                   <p className="text-xs text-muted-foreground truncate">{c.email}</p>

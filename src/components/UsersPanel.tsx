@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from "@/hooks/use-toast";
 import { Copy, Loader2, Plus, Trash2, Users, UserX } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { UserAvatar } from "@/components/UserAvatar";
 
 // Color por rol (mismos tokens `--kpi-*` que usan los KPIs del dashboard),
 // para poder identificar el rol de un vistazo en los chips y las filas.
@@ -31,6 +32,7 @@ interface AdminUser {
   role_display: string;
   is_active: boolean;
   initial: string;
+  photo: string | null;
 }
 
 interface RoleOption {
@@ -154,6 +156,7 @@ export function UsersPanel() {
           role_display: roles.find((r) => r.value === data.role)?.label ?? data.role,
           is_active: true,
           initial: (data.full_name?.[0] || data.email[0]).toUpperCase(),
+          photo: null,
         },
         ...prev,
       ]);
@@ -353,12 +356,12 @@ export function UsersPanel() {
                 className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl border transition-all hover:shadow-sm hover:border-primary/30"
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+                  <UserAvatar
+                    photoUrl={u.photo}
+                    name={u.full_name || u.email}
+                    className="w-9 h-9 rounded-full text-sm"
                     style={{ background: `hsl(var(${colorVar}) / 0.15)`, color: `hsl(var(${colorVar}))` }}
-                  >
-                    {u.initial}
-                  </div>
+                  />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium truncate">{u.full_name || "Sin nombre"}</p>
