@@ -8,8 +8,7 @@ import html2canvas from "html2canvas";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { FieldDraggable } from "@/components/FieldDraggable";
 import {
-  ArrowLeft, Save, Download, Undo2, Redo2, Trash2, Eraser, Settings2,
-  Minus, ArrowRight, Plus, X,
+  ArrowLeft, Save, Download, Undo2, Redo2, Trash2, Eraser, Settings2, Minus, Plus, X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,14 +34,19 @@ interface MarkerItem { id: string; type: "marker"; kind: ObjKind; x: number; y: 
 interface PlayerToken { id: string; type: "player"; team: "A" | "B"; number: string; name: string; playerId?: string; x: number; y: number }
 type SceneItem = MarkerItem | PlayerToken;
 
-type LineStyle = "solid" | "dashed";
-interface SceneLine { id: string; x1: number; y1: number; x2: number; y2: number; style: LineStyle; arrow: boolean; color: string; thickness: number }
+// Trazo (recta/zigzag/curva) x sólida-punteada x terminación — todas las
+// combinaciones del spec se arman con estos 3 ejes independientes.
+type LineShape = "straight" | "zigzag" | "curve";
+type LineEnd = "none" | "arrow" | "x" | "t";
+interface LineStyle { shape: LineShape; dashed: boolean; end: LineEnd; color: string; thickness: number }
+interface SceneLine extends LineStyle { id: string; x1: number; y1: number; x2: number; y2: number }
 
 interface Scene { objects: SceneItem[]; lines: SceneLine[] }
 
 interface PlayerSettings { size: number; showBall: boolean; showGridOnDrag: boolean; snapToGrid: boolean }
 
 const DEFAULT_PLAYER_SETTINGS: PlayerSettings = { size: 40, showBall: true, showGridOnDrag: false, snapToGrid: false };
+const DEFAULT_LINE_STYLE: LineStyle = { shape: "straight", dashed: false, end: "arrow", color: "#111827", thickness: 3 };
 
 const OBJ_CATALOG: { kind: ObjKind; label: string; emoji: string }[] = [
   { kind: "cone", label: "Cono", emoji: "🔶" },
@@ -68,6 +72,17 @@ const LINE_COLORS = [
   { value: "#eab308", label: "Amarillo" },
 ];
 const LINE_THICKNESS = [2, 3, 4, 5];
+const LINE_SHAPES: { value: LineShape; label: string }[] = [
+  { value: "straight", label: "Recta" },
+  { value: "zigzag", label: "Zigzag" },
+  { value: "curve", label: "Curva" },
+];
+const LINE_ENDS: { value: LineEnd; label: string }[] = [
+  { value: "none", label: "Ninguna" },
+  { value: "arrow", label: "Flecha" },
+  { value: "x", label: "X" },
+  { value: "t", label: "T" },
+];
 
 const COURT_TYPES: { value: BoardDetail["court_type"]; label: string }[] = [
   { value: "full", label: "Cancha completa" },
@@ -88,13 +103,39 @@ const FIELD_THEME: Record<BoardDetail["field_color"], { bg: string; line: string
 };
 
 const snapVal = (v: number, snap: boolean) => (snap ? Math.round(v / 5) * 5 : v);
+const markerId = (l: LineStyle) => `end-${l.end}-${l.color.replace("#", "")}`;
+
+/** Construye el `d` del path (viewBox 0-100) según la forma de la línea. */
+const buildLinePath = (l: { x1: number; y1: number; x2: number; y2: number; shape: LineShape }) => {
+  const { x1, y1, x2, y2, shape } = l;
+  if (shape === "straight") return `M ${x1} ${y1} L ${x2} ${y2}`;
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  if (shape === "curve") {
+    const mx = (x1 + x2) / 2 + nx * len * 0.25;
+    const my = (y1 + y2) / 2 + ny * len * 0.25;
+    return `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`;
+  }
+  const segments = 6;
+  const amp = Math.min(len * 0.1, 4);
+  let d = `M ${x1} ${y1}`;
+  for (let i = 1; i <= segments; i++) {
+    const t = i / segments;
+    const px = x1 + dx * t;
+    const py = y1 + dy * t;
+    const off = i === segments ? 0 : (i % 2 === 0 ? -amp : amp);
+    d += ` L ${px + nx * off} ${py + ny * off}`;
+  }
+  return d;
+};
 
 // ---------------------------------------------------------------------------
 // Marcado de la cancha: 3 tipos x 3 colores
 // ---------------------------------------------------------------------------
 
 const GoalBox = ({ side, line }: { side: "top" | "bottom"; line: string }) => {
-  const s = side === "top" ? "top" : "bottom";
+  const s = side;
   const svgPath = side === "top" ? "M 5 0 Q 50 35 95 0" : "M 5 30 Q 50 -5 95 30";
   return (
     <>
@@ -113,9 +154,7 @@ const FieldMarkings = ({ courtType, mirrored, line }: { courtType: BoardDetail["
   if (courtType === "free") {
     return <div className="absolute inset-[4%] border-2 border-dashed rounded-sm" style={{ borderColor: line }} />;
   }
-
   const goalSide: "top" | "bottom" = mirrored ? "top" : "bottom";
-
   return (
     <>
       <div className="absolute inset-[4%] border-2 rounded-sm" style={{ borderColor: line }} />
@@ -130,10 +169,7 @@ const FieldMarkings = ({ courtType, mirrored, line }: { courtType: BoardDetail["
       )}
       {courtType === "half" && (
         <>
-          <div
-            className="absolute left-[4%] right-[4%] h-0.5"
-            style={{ background: line, [goalSide === "bottom" ? "top" : "bottom"]: "4%" }}
-          />
+          <div className="absolute left-[4%] right-[4%] h-0.5" style={{ background: line, [goalSide === "bottom" ? "top" : "bottom"]: "4%" }} />
           <div
             className="absolute left-1/2 w-[36%] aspect-square -translate-x-1/2 rounded-full border-2"
             style={{ borderColor: line, [goalSide === "bottom" ? "top" : "bottom"]: "4%", transform: `translate(-50%, ${goalSide === "bottom" ? "-50%" : "50%"})` }}
@@ -144,6 +180,41 @@ const FieldMarkings = ({ courtType, mirrored, line }: { courtType: BoardDetail["
     </>
   );
 };
+
+/** Editor de estilo de línea, compartido entre "línea seleccionada" y "próxima línea a dibujar". */
+const LineStyleEditor = ({ value, onChange }: { value: LineStyle; onChange: (patch: Partial<LineStyle>) => void }) => (
+  <div className="space-y-2.5">
+    <div className="flex gap-1.5">
+      {LINE_COLORS.map((c) => (
+        <button key={c.value} onClick={() => onChange({ color: c.value })}
+          className={`w-7 h-7 rounded-full border-2 ${value.color === c.value ? "border-white" : "border-transparent"}`}
+          style={{ background: c.value }} title={c.label} />
+      ))}
+    </div>
+    <div className="flex gap-1.5">
+      {LINE_THICKNESS.map((t) => (
+        <button key={t} onClick={() => onChange({ thickness: t })}
+          className={`flex-1 h-8 rounded-lg glass-card flex items-center justify-center ${value.thickness === t ? "ring-1 ring-primary" : ""}`}>
+          <div style={{ width: 16, height: t, background: "currentColor", borderRadius: 2 }} />
+        </button>
+      ))}
+    </div>
+    <div className="grid grid-cols-3 gap-1.5">
+      {LINE_SHAPES.map((s) => (
+        <Button key={s.value} size="sm" variant={value.shape === s.value ? "default" : "outline"} onClick={() => onChange({ shape: s.value })}>{s.label}</Button>
+      ))}
+    </div>
+    <div className="flex gap-1.5">
+      <Button size="sm" variant={!value.dashed ? "default" : "outline"} className="flex-1" onClick={() => onChange({ dashed: false })}>Sólida</Button>
+      <Button size="sm" variant={value.dashed ? "default" : "outline"} className="flex-1" onClick={() => onChange({ dashed: true })}>Punteada</Button>
+    </div>
+    <div className="grid grid-cols-4 gap-1.5">
+      {LINE_ENDS.map((e) => (
+        <Button key={e.value} size="sm" variant={value.end === e.value ? "default" : "outline"} onClick={() => onChange({ end: e.value })}>{e.label}</Button>
+      ))}
+    </div>
+  </div>
+);
 
 // ---------------------------------------------------------------------------
 // Editor
@@ -171,12 +242,10 @@ const GameEditor = () => {
   const [past, setPast] = useState<Scene[]>([]);
   const [future, setFuture] = useState<Scene[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
   const [drawingLine, setDrawingLine] = useState(false);
-  const [lineDraft, setLineDraft] = useState<{ x: number; y: number } | null>(null);
-  const [lineColor, setLineColor] = useState(LINE_COLORS[0].value);
-  const [lineStyle, setLineStyle] = useState<LineStyle>("solid");
-  const [lineThickness, setLineThickness] = useState(3);
-  const [lineArrow, setLineArrow] = useState(true);
+  const [nextLineStyle, setNextLineStyle] = useState<LineStyle>(DEFAULT_LINE_STYLE);
+  const [lineDraft, setLineDraft] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
 
   const [roster, setRoster] = useState<{ id: string; name: string; position: string }[]>([]);
 
@@ -195,9 +264,7 @@ const GameEditor = () => {
         setScene({ objects: loadedScene?.objects ?? [], lines: loadedScene?.lines ?? [] });
       })
       .catch((error) => {
-        if (isAxiosError(error) && (error.response?.status === 404 || error.response?.status === 403)) {
-          setNotFound(true);
-        }
+        if (isAxiosError(error) && (error.response?.status === 404 || error.response?.status === 403)) setNotFound(true);
       })
       .finally(() => setLoading(false));
   }, [id]);
@@ -264,19 +331,13 @@ const GameEditor = () => {
   };
 
   const updatePlayerToken = (itemId: string, patch: Partial<PlayerToken>) => {
-    setScene((s) => ({
-      ...s,
-      objects: s.objects.map((o) => (o.id === itemId && o.type === "player" ? { ...o, ...patch } : o)),
-    }));
+    setScene((s) => ({ ...s, objects: s.objects.map((o) => (o.id === itemId && o.type === "player" ? { ...o, ...patch } : o)) }));
   };
 
   const deleteSelected = () => {
     if (!selectedId) return;
     pushHistory();
-    setScene((s) => ({
-      objects: s.objects.filter((o) => o.id !== selectedId),
-      lines: s.lines.filter((l) => l.id !== selectedId),
-    }));
+    setScene((s) => ({ objects: s.objects.filter((o) => o.id !== selectedId), lines: s.lines.filter((l) => l.id !== selectedId) }));
     setSelectedId(null);
   };
 
@@ -286,45 +347,67 @@ const GameEditor = () => {
     setSelectedId(null);
   };
 
-  const fieldPointFromEvent = (e: React.MouseEvent<HTMLDivElement>) => {
+  // -------------------------------------------------------------------------
+  // Dibujo de líneas: arrastrar con el dedo o el mouse (Pointer Events cubre
+  // ambos con la misma lógica) — press, move, release, no clic-a-clic.
+  // -------------------------------------------------------------------------
+
+  const pointFromEvent = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = fieldRef.current?.getBoundingClientRect();
     if (!rect) return null;
-    return { x: snapVal(((e.clientX - rect.left) / rect.width) * 100, playerSettings.snapToGrid), y: snapVal(((e.clientY - rect.top) / rect.height) * 100, playerSettings.snapToGrid) };
+    return {
+      x: snapVal(((e.clientX - rect.left) / rect.width) * 100, playerSettings.snapToGrid),
+      y: snapVal(((e.clientY - rect.top) / rect.height) * 100, playerSettings.snapToGrid),
+    };
   };
 
-  const handleFieldClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!drawingLine) { setSelectedId(null); return; }
-    const pt = fieldPointFromEvent(e);
+    const pt = pointFromEvent(e);
     if (!pt) return;
-    if (!lineDraft) {
-      setLineDraft(pt);
-    } else {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setLineDraft({ x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y });
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drawingLine || !lineDraft) return;
+    const pt = pointFromEvent(e);
+    if (!pt) return;
+    setLineDraft((d) => (d ? { ...d, x2: pt.x, y2: pt.y } : d));
+  };
+
+  const handlePointerUp = () => {
+    if (!drawingLine || !lineDraft) return;
+    const dist = Math.hypot(lineDraft.x2 - lineDraft.x1, lineDraft.y2 - lineDraft.y1);
+    if (dist > 1.5) {
       pushHistory();
-      const line: SceneLine = {
-        id: `l-${Date.now()}-${Math.random()}`, x1: lineDraft.x, y1: lineDraft.y, x2: pt.x, y2: pt.y,
-        style: lineStyle, arrow: lineArrow, color: lineColor, thickness: lineThickness,
-      };
+      const line: SceneLine = { id: `l-${Date.now()}-${Math.random()}`, ...lineDraft, ...nextLineStyle };
       setScene((s) => ({ ...s, lines: [...s.lines, line] }));
-      setLineDraft(null);
-      setDrawingLine(false);
     }
+    setLineDraft(null);
+    setDrawingLine(false);
   };
 
   const moveLineEndpoint = (lineId: string, end: "1" | "2", pos: { x: number; y: number }) => {
     pushHistory();
-    setScene((s) => ({
-      ...s,
-      lines: s.lines.map((l) => (l.id === lineId ? { ...l, [`x${end}`]: pos.x, [`y${end}`]: pos.y } : l)),
-    }));
+    setScene((s) => ({ ...s, lines: s.lines.map((l) => (l.id === lineId ? { ...l, [`x${end}`]: pos.x, [`y${end}`]: pos.y } : l)) }));
   };
 
-  const updateSelectedLine = (patch: Partial<SceneLine>) => {
+  const updateSelectedLine = (patch: Partial<LineStyle>) => {
     if (!selectedId) return;
     setScene((s) => ({ ...s, lines: s.lines.map((l) => (l.id === selectedId ? { ...l, ...patch } : l)) }));
   };
 
   const selectedLine = scene.lines.find((l) => l.id === selectedId) ?? null;
   const selectedPlayerToken = scene.objects.find((o) => o.id === selectedId && o.type === "player") as PlayerToken | undefined;
+
+  const allMarkers = useCallback(() => {
+    const ends = new Set<LineEnd>(scene.lines.map((l) => l.end).filter((e) => e !== "none"));
+    ends.add(nextLineStyle.end);
+    const colors = new Set(scene.lines.map((l) => l.color));
+    colors.add(nextLineStyle.color);
+    return { ends, colors };
+  }, [scene.lines, nextLineStyle]);
 
   const captureThumbnail = async (): Promise<Blob | null> => {
     if (!fieldRef.current) return null;
@@ -406,6 +489,8 @@ const GameEditor = () => {
     );
   }
 
+  const { ends: markerEnds, colors: markerColors } = allMarkers();
+
   return (
     <DashboardLayout>
       <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px]">
@@ -444,9 +529,9 @@ const GameEditor = () => {
           <Button
             variant={drawingLine ? "default" : "outline"}
             className="gap-2"
-            onClick={() => { setDrawingLine((v) => !v); setLineDraft(null); }}
+            onClick={() => { setDrawingLine((v) => !v); setLineDraft(null); setSelectedId(null); }}
           >
-            <Minus className="w-4 h-4" /> {drawingLine ? (lineDraft ? "Clic para terminar" : "Clic para empezar") : "Línea"}
+            <Minus className="w-4 h-4" /> {drawingLine ? "Arrastra sobre la cancha..." : "Línea"}
           </Button>
           <Button variant="outline" size="icon" onClick={deleteSelected} disabled={!selectedId} title="Borrar seleccionado">
             <Trash2 className="w-4 h-4" />
@@ -462,13 +547,15 @@ const GameEditor = () => {
             <div className="relative w-full" style={{ paddingBottom: "140%" }}>
               <div
                 ref={fieldRef}
-                onClick={handleFieldClick}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
                 className="absolute inset-4 rounded-xl overflow-hidden"
-                style={{ background: theme.bg, cursor: drawingLine ? "crosshair" : "default" }}
+                style={{ background: theme.bg, cursor: drawingLine ? "crosshair" : "default", touchAction: drawingLine ? "none" : "auto" }}
               >
                 <FieldMarkings courtType={courtType} mirrored={mirrored} line={theme.line} />
 
-                {/* Grid overlay */}
                 {playerSettings.showGridOnDrag && (
                   <svg className="absolute inset-0 w-full h-full pointer-events-none" opacity={0.15}>
                     {[...Array(19)].map((_, i) => (
@@ -480,33 +567,52 @@ const GameEditor = () => {
                   </svg>
                 )}
 
-                {/* Lines */}
-                <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: drawingLine ? "none" : "auto" }}>
+                {/* Líneas */}
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full" style={{ pointerEvents: drawingLine ? "none" : "auto" }}>
                   <defs>
-                    {LINE_COLORS.map((c) => (
-                      <marker key={c.value} id={`arrow-${c.value.replace("#", "")}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" fill={c.value} />
-                      </marker>
-                    ))}
+                    {[...markerColors].flatMap((color) =>
+                      [...markerEnds].map((end) => {
+                        if (end === "none") return null;
+                        const id = markerId({ ...DEFAULT_LINE_STYLE, end, color });
+                        if (end === "arrow") return (
+                          <marker key={id} id={id} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill={color} />
+                          </marker>
+                        );
+                        if (end === "x") return (
+                          <marker key={id} id={id} viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                            <path d="M 1 1 L 9 9 M 9 1 L 1 9" stroke={color} strokeWidth="1.6" />
+                          </marker>
+                        );
+                        return (
+                          <marker key={id} id={id} viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                            <path d="M 5 0 L 5 10" stroke={color} strokeWidth="1.8" />
+                          </marker>
+                        );
+                      })
+                    )}
                   </defs>
                   {scene.lines.map((l) => (
-                    <line
+                    <path
                       key={l.id}
-                      x1={`${l.x1}%`} y1={`${l.y1}%`} x2={`${l.x2}%`} y2={`${l.y2}%`}
-                      stroke={l.color} strokeWidth={l.thickness}
-                      strokeDasharray={l.style === "dashed" ? "8 6" : undefined}
-                      markerEnd={l.arrow ? `url(#arrow-${l.color.replace("#", "")})` : undefined}
-                      style={{ cursor: "pointer", pointerEvents: "stroke" }}
+                      d={buildLinePath(l)}
+                      stroke={l.color}
+                      strokeWidth={l.thickness}
+                      strokeDasharray={l.dashed ? "3 2.5" : undefined}
+                      markerEnd={l.end !== "none" ? `url(#${markerId(l)})` : undefined}
+                      fill="none"
+                      vectorEffect="non-scaling-stroke"
+                      style={{ cursor: "pointer" }}
                       onClick={(e) => { e.stopPropagation(); setSelectedId(l.id); }}
                       opacity={selectedId === l.id ? 1 : 0.9}
                     />
                   ))}
                   {lineDraft && (
-                    <circle cx={`${lineDraft.x}%`} cy={`${lineDraft.y}%`} r={4} fill={lineColor} />
+                    <path d={buildLinePath({ ...lineDraft, shape: nextLineStyle.shape })} stroke={nextLineStyle.color} strokeWidth={nextLineStyle.thickness}
+                      strokeDasharray={nextLineStyle.dashed ? "3 2.5" : undefined} fill="none" vectorEffect="non-scaling-stroke" opacity={0.7} />
                   )}
                 </svg>
 
-                {/* Line endpoint handles (only for selected line) */}
                 {selectedLine && (
                   <>
                     <FieldDraggable fieldRef={fieldRef} x={selectedLine.x1} y={selectedLine.y1} onMove={(p) => moveLineEndpoint(selectedLine.id, "1", p)} className="absolute z-30 cursor-grab">
@@ -518,70 +624,55 @@ const GameEditor = () => {
                   </>
                 )}
 
-                {/* Objects + players */}
-                {scene.objects.map((o) => (
-                  <FieldDraggable
-                    key={o.id}
-                    fieldRef={fieldRef}
-                    x={o.x}
-                    y={o.y}
-                    onMove={(pos) => moveItem(o.id, pos)}
-                    onClick={() => setSelectedId(o.id)}
-                    className={`absolute cursor-grab active:cursor-grabbing select-none ${selectedId === o.id ? "z-20" : "z-10"}`}
-                  >
-                    {o.type === "marker" ? (
-                      <span className="text-2xl drop-shadow-md" style={{ filter: selectedId === o.id ? "drop-shadow(0 0 4px white)" : undefined }}>
-                        {OBJ_CATALOG.find((c) => c.kind === o.kind)?.emoji ?? "❔"}
-                      </span>
-                    ) : (
-                      <div className="flex flex-col items-center gap-0.5">
-                        <div
-                          className={`rounded-full flex items-center justify-center font-bold text-white shadow-lg border-[3px] ${selectedId === o.id ? "ring-2 ring-white" : ""}`}
-                          style={{
-                            width: playerSettings.size, height: playerSettings.size, fontSize: playerSettings.size * 0.35,
-                            background: o.team === "A" ? "#3b82f6" : "#ef4444",
-                            borderColor: o.team === "A" ? "#60a5fa" : "#f87171",
-                          }}
-                        >
-                          {o.number}
+                {/* Objetos y jugadores — se desactiva su drag mientras se dibuja una línea */}
+                <div className="contents" style={{ pointerEvents: drawingLine ? "none" : undefined }}>
+                  {scene.objects.map((o) => (
+                    <FieldDraggable
+                      key={o.id}
+                      fieldRef={fieldRef}
+                      x={o.x}
+                      y={o.y}
+                      onMove={(pos) => moveItem(o.id, pos)}
+                      onClick={() => setSelectedId(o.id)}
+                      className={`absolute cursor-grab active:cursor-grabbing select-none ${selectedId === o.id ? "z-20" : "z-10"}`}
+                    >
+                      {o.type === "marker" ? (
+                        <span className="text-2xl drop-shadow-md" style={{ filter: selectedId === o.id ? "drop-shadow(0 0 4px white)" : undefined }}>
+                          {OBJ_CATALOG.find((c) => c.kind === o.kind)?.emoji ?? "❔"}
+                        </span>
+                      ) : (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <div
+                            className={`rounded-full flex items-center justify-center font-bold text-white shadow-lg border-[3px] ${selectedId === o.id ? "ring-2 ring-white" : ""}`}
+                            style={{
+                              width: playerSettings.size, height: playerSettings.size, fontSize: playerSettings.size * 0.35,
+                              background: o.team === "A" ? "#3b82f6" : "#ef4444",
+                              borderColor: o.team === "A" ? "#60a5fa" : "#f87171",
+                            }}
+                          >
+                            {o.number}
+                          </div>
+                          <span className="text-[10px] font-semibold text-white drop-shadow-md leading-tight">{o.name}</span>
                         </div>
-                        <span className="text-[10px] font-semibold text-white drop-shadow-md leading-tight">{o.name}</span>
-                      </div>
-                    )}
-                  </FieldDraggable>
-                ))}
+                      )}
+                    </FieldDraggable>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Right panel */}
           <div className="space-y-4">
-            {selectedLine && (
+            {(selectedLine || drawingLine) && (
               <div className="glass-card-elevated p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Línea seleccionada</p>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedId(null)}><X className="w-3.5 h-3.5" /></Button>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    {selectedLine ? "Línea seleccionada" : "Próxima línea"}
+                  </p>
+                  {selectedLine && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedId(null)}><X className="w-3.5 h-3.5" /></Button>}
                 </div>
-                <div className="flex gap-1.5">
-                  {LINE_COLORS.map((c) => (
-                    <button key={c.value} onClick={() => updateSelectedLine({ color: c.value })}
-                      className={`w-7 h-7 rounded-full border-2 ${selectedLine.color === c.value ? "border-white" : "border-transparent"}`}
-                      style={{ background: c.value }} title={c.label} />
-                  ))}
-                </div>
-                <div className="flex gap-1.5">
-                  {LINE_THICKNESS.map((t) => (
-                    <button key={t} onClick={() => updateSelectedLine({ thickness: t })}
-                      className={`flex-1 h-8 rounded-lg glass-card flex items-center justify-center ${selectedLine.thickness === t ? "ring-1 ring-primary" : ""}`}>
-                      <div style={{ width: 16, height: t, background: "currentColor", borderRadius: 2 }} />
-                    </button>
-                  ))}
-                </div>
-                <div className="flex gap-1.5">
-                  <Button size="sm" variant={selectedLine.style === "solid" ? "default" : "outline"} className="flex-1" onClick={() => updateSelectedLine({ style: "solid" })}>Sólida</Button>
-                  <Button size="sm" variant={selectedLine.style === "dashed" ? "default" : "outline"} className="flex-1" onClick={() => updateSelectedLine({ style: "dashed" })}>Punteada</Button>
-                  <Button size="sm" variant={selectedLine.arrow ? "default" : "outline"} className="flex-1 gap-1" onClick={() => updateSelectedLine({ arrow: !selectedLine.arrow })}><ArrowRight className="w-3.5 h-3.5" /></Button>
-                </div>
+                <LineStyleEditor value={selectedLine ?? nextLineStyle} onChange={selectedLine ? updateSelectedLine : (p) => setNextLineStyle((s) => ({ ...s, ...p }))} />
               </div>
             )}
 
@@ -592,11 +683,7 @@ const GameEditor = () => {
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedId(null)}><X className="w-3.5 h-3.5" /></Button>
                 </div>
                 <div className="flex gap-2">
-                  <Input
-                    value={selectedPlayerToken.number}
-                    onChange={(e) => updatePlayerToken(selectedPlayerToken.id, { number: e.target.value.slice(0, 2) })}
-                    className="w-16" placeholder="#"
-                  />
+                  <Input value={selectedPlayerToken.number} onChange={(e) => updatePlayerToken(selectedPlayerToken.id, { number: e.target.value.slice(0, 2) })} className="w-16" placeholder="#" />
                   <Button size="sm" variant={selectedPlayerToken.team === "A" ? "default" : "outline"} className="flex-1" onClick={() => updatePlayerToken(selectedPlayerToken.id, { team: "A" })}>Equipo A</Button>
                   <Button size="sm" variant={selectedPlayerToken.team === "B" ? "default" : "outline"} className="flex-1" onClick={() => updatePlayerToken(selectedPlayerToken.id, { team: "B" })}>Equipo B</Button>
                 </div>
@@ -696,23 +783,6 @@ const GameEditor = () => {
               <Label>Ajustar a la cuadrícula</Label>
               <Switch checked={playerSettings.snapToGrid} onCheckedChange={(v) => setPlayerSettings((p) => ({ ...p, snapToGrid: v }))} />
             </div>
-            {drawingLine && (
-              <div>
-                <Label className="mb-2 block">Nueva línea</Label>
-                <div className="flex gap-1.5 mb-2">
-                  {LINE_COLORS.map((c) => (
-                    <button key={c.value} onClick={() => setLineColor(c.value)}
-                      className={`w-7 h-7 rounded-full border-2 ${lineColor === c.value ? "border-white" : "border-transparent"}`}
-                      style={{ background: c.value }} />
-                  ))}
-                </div>
-                <div className="flex gap-1.5">
-                  <Button size="sm" variant={lineStyle === "solid" ? "default" : "outline"} className="flex-1" onClick={() => setLineStyle("solid")}>Sólida</Button>
-                  <Button size="sm" variant={lineStyle === "dashed" ? "default" : "outline"} className="flex-1" onClick={() => setLineStyle("dashed")}>Punteada</Button>
-                  <Button size="sm" variant={lineArrow ? "default" : "outline"} className="flex-1" onClick={() => setLineArrow((v) => !v)}>Flecha</Button>
-                </div>
-              </div>
-            )}
           </div>
         </SheetContent>
       </Sheet>
