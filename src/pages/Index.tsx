@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard } from "@/components/KpiCard";
 import { RecentActivity } from "@/components/RecentActivity";
 import { PerformanceChart, AttendanceChart } from "@/components/DashboardCharts";
 import { Users, CalendarCheck, DollarSign, TrendingUp, Bell } from "lucide-react";
 import { motion } from "framer-motion";
+import api from "@/lib/api";
 
 const alerts = [
   { text: "5 pagos pendientes para este mes", type: "warning" as const },
@@ -11,7 +13,33 @@ const alerts = [
   { text: "2 jugadores sin evaluación reciente", type: "warning" as const },
 ];
 
+interface SessionAttendanceSummary {
+  summary: { attendance_rate: number };
+}
+
 const Dashboard = () => {
+  const [totalPlayers, setTotalPlayers] = useState<number | null>(null);
+  const [avgAttendance, setAvgAttendance] = useState<number | null>(null);
+
+  useEffect(() => {
+    api
+      .get<{ count: number }>("/players/", { params: { status: "confirmed", page_size: 1 } })
+      .then(({ data }) => setTotalPlayers(data.count))
+      .catch(() => { /* deja el KPI en "—" si falla */ });
+
+    api
+      .get<SessionAttendanceSummary[]>("/training-sessions/attendance-history/")
+      .then(({ data }) => {
+        if (data.length === 0) {
+          setAvgAttendance(0);
+          return;
+        }
+        const avg = data.reduce((sum, s) => sum + s.summary.attendance_rate, 0) / data.length;
+        setAvgAttendance(Math.round(avg));
+      })
+      .catch(() => { /* deja el KPI en "—" si falla */ });
+  }, []);
+
   return (
     <DashboardLayout>
       <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px]">
@@ -27,8 +55,8 @@ const Dashboard = () => {
 
         {/* KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <KpiCard icon={Users} title="Total Deportistas" value="248" change="+12%" trend="up" color="green" delay={0.05} />
-          <KpiCard icon={CalendarCheck} title="Asistencia Promedio" value="89%" change="+3%" trend="up" color="blue" delay={0.1} />
+          <KpiCard icon={Users} title="Total Deportistas" value={totalPlayers === null ? "—" : String(totalPlayers)} color="green" delay={0.05} />
+          <KpiCard icon={CalendarCheck} title="Asistencia Promedio" value={avgAttendance === null ? "—" : `${avgAttendance}%`} color="blue" delay={0.1} />
           <KpiCard icon={DollarSign} title="Ingresos del Mes" value="$12.4M" change="+8%" trend="up" color="amber" delay={0.15} />
           <KpiCard icon={TrendingUp} title="Rendimiento Prom." value="76.3" change="-2%" trend="down" color="red" delay={0.2} />
         </div>

@@ -4,8 +4,8 @@ import { motion } from "framer-motion";
 interface KpiCardProps {
   title: string;
   value: string;
-  change: string;
-  trend: "up" | "down";
+  change?: string;
+  trend?: "up" | "down";
   icon: LucideIcon;
   color: "green" | "blue" | "amber" | "red";
   delay?: number;
@@ -33,12 +33,14 @@ export function KpiCard({ title, value, change, trend, icon: Icon, color, delay 
         >
           <Icon className="w-5 h-5" style={{ color: `hsl(${colorMap[color]})` }} />
         </div>
-        <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
-          trend === "up" ? "bg-accent text-accent-foreground" : "bg-destructive/10 text-destructive"
-        }`}>
-          {trend === "up" ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-          {change}
-        </div>
+        {change && trend && (
+          <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
+            trend === "up" ? "bg-accent text-accent-foreground" : "bg-destructive/10 text-destructive"
+          }`}>
+            {trend === "up" ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {change}
+          </div>
+        )}
       </div>
       <p className="text-2xl font-display font-bold text-foreground">{value}</p>
       <p className="text-sm text-muted-foreground mt-1">{title}</p>
