@@ -5,6 +5,7 @@ import { navSections } from "./AppSidebar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
 import { filterNavSections } from "@/lib/access";
+import { confirmNavigation } from "@/lib/navigation-guard";
 
 const TAB_META: Record<string, { label: string; icon: typeof LayoutDashboard }> = {
   Principal: { label: "Principal", icon: LayoutDashboard },
@@ -32,6 +33,7 @@ export function MobileBottomNav() {
       ?.items.some((i) => i.path === location.pathname) ?? false;
 
   const go = (path: string) => {
+    if (!confirmNavigation()) return;
     navigate(path);
     setOpenKey(null);
   };
@@ -97,7 +99,7 @@ export function MobileBottomNav() {
                   <Settings className="w-[18px] h-[18px]" />
                   <span>Configuración</span>
                 </button>
-                <button onClick={() => void signOut()} className="sidebar-item w-full">
+                <button onClick={() => confirmNavigation() && void signOut()} className="sidebar-item w-full">
                   <LogOut className="h-[18px] w-[18px]" />
                   <span>Cerrar sesión</span>
                 </button>

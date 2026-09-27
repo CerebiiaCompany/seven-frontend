@@ -17,6 +17,7 @@ import {
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import { useUnsavedChangesPrompt } from "@/hooks/use-unsaved-changes-prompt";
 
 type Status = "present" | "late" | "absent" | "excused";
 
@@ -162,6 +163,20 @@ export default function Attendance() {
   const count = (s: Status) => list.filter((p) => current[p.player_id] === s).length;
   const rate = list.length ? Math.round(((count("present") + count("late")) / list.length) * 100) : 0;
 
+  // "Sucio" = lo marcado en pantalla (`current`) difiere de lo último
+  // realmente guardado para esa sesión (`roster[].status`) — se recalcula
+  // cada vez que se guarda, porque `save()` refresca `roster` con la
+  // respuesta del backend.
+  const isDirty = useMemo(
+    () => roster.some((p) => (current[p.player_id] ?? null) !== (p.status ?? null)),
+    [roster, current],
+  );
+
+  useUnsavedChangesPrompt(
+    "Tienes cambios de asistencia sin guardar. Si sales de esta pantalla se perderán. ¿Deseas continuar?",
+    isDirty,
+  );
+
   const mark = (playerId: string, status: Status) =>
     setCurrent((c) => ({ ...c, [playerId]: status }));
 
@@ -212,9 +227,16 @@ export default function Attendance() {
             <h1 className="text-2xl sm:text-3xl font-display font-bold">Asistencia</h1>
             <p className="text-muted-foreground mt-1">Control de asistencia a entrenamientos y partidos</p>
           </div>
-          <Button className="gap-2" onClick={save} disabled={saving || !sessionId}>
-            <ClipboardCheck className="w-4 h-4" /> {saving ? "Guardando..." : "Guardar asistencia"}
-          </Button>
+          <div className="flex items-center gap-3">
+            {isDirty && (
+              <span className="flex items-center gap-1.5 text-xs font-medium text-[hsl(var(--kpi-amber))]">
+                <AlertCircle className="w-3.5 h-3.5" /> Cambios sin guardar
+              </span>
+            )}
+            <Button className="gap-2" onClick={save} disabled={saving || !sessionId}>
+              <ClipboardCheck className="w-4 h-4" /> {saving ? "Guardando..." : "Guardar asistencia"}
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

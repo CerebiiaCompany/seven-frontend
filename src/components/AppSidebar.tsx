@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { filterNavSections } from "@/lib/access";
+import { confirmNavigation } from "@/lib/navigation-guard";
 import { ClubBrandMark } from "@/components/ClubBrandMark";
 
 export const navSections = [
@@ -64,6 +65,7 @@ export function SidebarNav({ collapsed = false, onNavigate }: SidebarContentProp
   }, []);
 
   const go = (path: string) => {
+    if (!confirmNavigation()) return;
     navigate(path);
     onNavigate?.();
   };
@@ -148,7 +150,7 @@ export function AppSidebar() {
       <SidebarBrand collapsed={collapsed} />
       <SidebarNav collapsed={collapsed} />
       <div className="px-3 pb-4">
-        <button onClick={() => void signOut()} className="sidebar-item mb-1 w-full" title={collapsed ? "Cerrar sesión" : undefined}>
+        <button onClick={() => confirmNavigation() && void signOut()} className="sidebar-item mb-1 w-full" title={collapsed ? "Cerrar sesión" : undefined}>
           <LogOut className="h-[18px] w-[18px] flex-shrink-0" />
           {!collapsed && <span className="text-xs">Cerrar sesión</span>}
         </button>
