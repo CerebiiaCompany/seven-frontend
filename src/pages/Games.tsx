@@ -48,7 +48,16 @@ export const createBoard = async (payload: { name: string; category_id: string; 
   return data;
 };
 
-export const updateBoard = async (id: string, payload: Partial<{ name: string; scene: BoardScene }>) => {
+export type BoardUpdatePayload = Partial<{
+  name: string;
+  court_type: BoardDetail["court_type"];
+  field_color: BoardDetail["field_color"];
+  mirrored: boolean;
+  player_settings: Record<string, unknown>;
+  scene: BoardScene;
+}>;
+
+export const updateBoard = async (id: string, payload: BoardUpdatePayload) => {
   const { data } = await api.patch<BoardDetail>(`/boards/${id}/`, payload);
   return data;
 };
@@ -60,4 +69,10 @@ export const duplicateBoard = async (id: string) => {
 
 export const deleteBoard = async (id: string) => {
   await api.delete(`/boards/${id}/`);
+};
+
+export const uploadThumbnail = async (id: string, blob: Blob) => {
+  const formData = new FormData();
+  formData.append("thumbnail", blob, "thumbnail.png");
+  await api.put(`/boards/${id}/thumbnail/`, formData, { headers: { "Content-Type": undefined } });
 };
