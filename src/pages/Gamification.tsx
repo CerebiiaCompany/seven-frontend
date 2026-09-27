@@ -14,12 +14,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Gamepad2, Shield, Medal,
-  Download, Trash2, RotateCcw, Move, Plus, Copy, ImageOff,
+  Download, Trash2, RotateCcw, Move, Plus, Clock, ImageOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { type BoardListItem, listBoards, duplicateBoard, deleteBoard } from "./Games";
+import { type BoardListItem, listBoards, deleteBoard } from "./Games";
+
+const formatDateTime = (iso: string) =>
+  new Date(iso).toLocaleString("es-CO", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 const formations = ["4-3-3", "4-4-2", "3-5-2", "4-2-3-1"];
 
@@ -124,7 +127,6 @@ const Gamification = () => {
   const [boards, setBoards] = useState<BoardListItem[]>([]);
   const [boardsLoading, setBoardsLoading] = useState(true);
   const [boardsDenied, setBoardsDenied] = useState(false);
-  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   const loadBoards = useCallback(async () => {
     setBoardsLoading(true);
@@ -140,19 +142,6 @@ const Gamification = () => {
   }, []);
 
   useEffect(() => { loadBoards(); }, [loadBoards]);
-
-  const handleDuplicateBoard = async (id: string) => {
-    setDuplicatingId(id);
-    try {
-      await duplicateBoard(id);
-      toast.success("Juego duplicado");
-      loadBoards();
-    } catch {
-      toast.error("No se pudo duplicar el juego");
-    } finally {
-      setDuplicatingId(null);
-    }
-  };
 
   const handleDeleteBoard = async (id: string) => {
     try {
@@ -342,14 +331,15 @@ const Gamification = () => {
                         {board.category && <Badge variant="secondary" className="text-[10px]">{board.category.name}</Badge>}
                         {board.group && <Badge variant="secondary" className="text-[10px]">{board.group.name}</Badge>}
                       </div>
-                      <div className="flex items-center gap-1.5 mt-3">
-                        <Button
-                          variant="outline" size="sm" className="gap-1.5 flex-1"
-                          disabled={duplicatingId === board.id}
-                          onClick={() => handleDuplicateBoard(board.id)}
-                        >
-                          <Copy className="w-3.5 h-3.5" /> Duplicar
-                        </Button>
+                      <div className="mt-2 space-y-0.5">
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> Creado: {formatDateTime(board.created_at)}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> Modificado: {formatDateTime(board.updated_at)}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-end gap-1.5 mt-3">
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="outline" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">

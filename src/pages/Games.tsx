@@ -62,11 +62,6 @@ export const updateBoard = async (id: string, payload: BoardUpdatePayload) => {
   return data;
 };
 
-export const duplicateBoard = async (id: string) => {
-  const { data } = await api.post<BoardListItem>(`/boards/${id}/duplicate/`);
-  return data;
-};
-
 export const deleteBoard = async (id: string) => {
   await api.delete(`/boards/${id}/`);
 };
