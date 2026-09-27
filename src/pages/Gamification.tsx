@@ -310,19 +310,43 @@ const Gamification = () => {
                     transition={{ delay: i * 0.03 }}
                     className="glass-card overflow-hidden group"
                   >
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/gamification/${board.id}`)}
-                      className="block w-full aspect-[4/3] bg-muted/40 overflow-hidden"
-                    >
-                      {board.thumbnail ? (
-                        <img src={board.thumbnail} alt={board.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <ImageOff className="w-8 h-8 text-muted-foreground/30" />
-                        </div>
-                      )}
-                    </button>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/gamification/${board.id}`)}
+                        className="block w-full aspect-[4/3] bg-muted/40 overflow-hidden"
+                      >
+                        {board.thumbnail ? (
+                          <img src={board.thumbnail} alt={board.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <ImageOff className="w-8 h-8 text-muted-foreground/30" />
+                          </div>
+                        )}
+                      </button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline" size="icon"
+                            className="absolute top-1.5 right-1.5 h-7 w-7 bg-background/80 backdrop-blur-sm text-destructive hover:text-destructive"
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Eliminar ${board.name}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Eliminar "{board.name}"?</AlertDialogTitle>
+                            <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteBoard(board.id)}>Eliminar</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                     <div className="p-3">
                       <button type="button" onClick={() => navigate(`/gamification/${board.id}`)} className="text-left w-full">
                         <p className="text-sm font-semibold text-foreground truncate">{board.name}</p>
@@ -338,25 +362,6 @@ const Gamification = () => {
                         <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                           <Clock className="w-3 h-3" /> Modificado: {formatDateTime(board.updated_at)}
                         </p>
-                      </div>
-                      <div className="flex items-center justify-end gap-1.5 mt-3">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="outline" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>¿Eliminar "{board.name}"?</AlertDialogTitle>
-                              <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteBoard(board.id)}>Eliminar</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
                       </div>
                     </div>
                   </motion.div>
