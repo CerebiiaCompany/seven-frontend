@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
@@ -12,13 +12,24 @@ import {
   Clock, Users, ChevronRight, Target, Calendar, Layers,
   GraduationCap, Flame, Shield
 } from "lucide-react";
+import api from "@/lib/api";
 
-// --- Mock Data ---
-const coaches = [
-  { id: 1, name: "Carlos Mendoza", specialty: "Técnica Individual", categories: ["Sub-15", "Sub-17"], methodologies: 3, cycles: 2, avatar: "CM" },
-  { id: 2, name: "Laura Gutiérrez", specialty: "Preparación Física", categories: ["Sub-13", "Sub-15"], methodologies: 2, cycles: 1, avatar: "LG" },
-  { id: 3, name: "Roberto Sánchez", specialty: "Táctica y Estrategia", categories: ["Sub-17"], methodologies: 4, cycles: 3, avatar: "RS" },
-];
+interface ApiCoach {
+  id: string;
+  full_name: string;
+  email: string;
+  categories: string[];
+}
+
+const initialsOf = (fullName: string) =>
+  fullName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "?";
+
+// --- Mock Data (metodologías, ciclos y ejercicios: aún no hay módulo real en el backend) ---
 
 const methodologies = [
   { id: 1, name: "Periodización Táctica", coach: "Carlos Mendoza", phases: 4, exercises: 24, category: "Táctica", color: "hsl(var(--kpi-blue))" },
@@ -152,10 +163,18 @@ const statusBadge = (s: string) => {
 };
 
 const Coaches = () => {
+  const [coaches, setCoaches] = useState<ApiCoach[]>([]);
   const [search, setSearch] = useState("");
   const [showNewMethodology, setShowNewMethodology] = useState(false);
   const [showNewExercise, setShowNewExercise] = useState(false);
   const [selectedCycle, setSelectedCycle] = useState<Cycle | null>(null);
+
+  useEffect(() => {
+    api
+      .get<ApiCoach[]>("/coaches/")
+      .then(({ data }) => setCoaches(data))
+      .catch(() => { /* deja la lista vacía si falla */ });
+  }, []);
 
   return (
     <DashboardLayout>
@@ -170,26 +189,30 @@ const Coaches = () => {
 
         {/* Coach cards */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.05 }} className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          {coaches.map((c) => (
-            <div key={c.id} className="glass-card p-5 flex items-start gap-4">
-              <div className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold text-primary-foreground flex-shrink-0" style={{ background: "hsl(var(--primary))" }}>
-                {c.avatar}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm text-foreground truncate">{c.name}</p>
-                <p className="text-xs text-muted-foreground">{c.specialty}</p>
-                <div className="flex gap-1.5 mt-2 flex-wrap">
-                  {c.categories.map((cat) => (
-                    <Badge key={cat} variant="secondary" className="text-[10px]">{cat}</Badge>
-                  ))}
+          {coaches.length === 0 ? (
+            <p className="text-sm text-muted-foreground md:col-span-3">No hay entrenadores registrados todavía.</p>
+          ) : (
+            coaches.map((c) => (
+              <div key={c.id} className="glass-card p-5 flex items-start gap-4">
+                <div className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold text-primary-foreground flex-shrink-0" style={{ background: "hsl(var(--primary))" }}>
+                  {initialsOf(c.full_name)}
                 </div>
-                <div className="flex gap-4 mt-3 text-[11px] text-muted-foreground">
-                  <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{c.methodologies} metodologías</span>
-                  <span className="flex items-center gap-1"><RefreshCcw className="w-3 h-3" />{c.cycles} ciclos</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm text-foreground truncate">{c.full_name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{c.email}</p>
+                  <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {c.categories.length > 0 ? (
+                      c.categories.map((cat) => (
+                        <Badge key={cat} variant="secondary" className="text-[10px]">{cat}</Badge>
+                      ))
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">Sin categoría/grupo a cargo aún</span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </motion.div>
 
         {/* Tabs */}
