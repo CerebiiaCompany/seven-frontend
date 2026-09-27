@@ -10,15 +10,6 @@ const performanceData = [
   { month: "Jun", tecnica: 82, fisica: 80, tactica: 78 },
 ];
 
-const attendanceData = [
-  { day: "Lun", asistencia: 92 },
-  { day: "Mar", asistencia: 88 },
-  { day: "Mié", asistencia: 95 },
-  { day: "Jue", asistencia: 85 },
-  { day: "Vie", asistencia: 90 },
-  { day: "Sáb", asistencia: 78 },
-];
-
 export function PerformanceChart() {
   return (
     <motion.div
@@ -66,7 +57,11 @@ export function PerformanceChart() {
   );
 }
 
-export function AttendanceChart() {
+interface AttendanceChartProps {
+  data: { day: string; asistencia: number }[];
+}
+
+export function AttendanceChart({ data }: AttendanceChartProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -77,7 +72,7 @@ export function AttendanceChart() {
       <h3 className="font-display font-semibold text-foreground mb-1">Asistencia Semanal</h3>
       <p className="text-xs text-muted-foreground mb-4">Porcentaje por día</p>
       <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={attendanceData}>
+        <BarChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
           <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" domain={[0, 100]} />

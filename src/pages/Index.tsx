@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { startOfWeek, addDays, isSameDay } from "date-fns";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { KpiCard } from "@/components/KpiCard";
 import { RecentActivity } from "@/components/RecentActivity";
@@ -13,13 +14,19 @@ const alerts = [
   { text: "2 jugadores sin evaluación reciente", type: "warning" as const },
 ];
 
-interface SessionAttendanceSummary {
+interface SessionAttendanceItem {
+  training_session: { scheduled_at: string };
   summary: { attendance_rate: number };
 }
+
+const WEEKDAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 const Dashboard = () => {
   const [totalPlayers, setTotalPlayers] = useState<number | null>(null);
   const [avgAttendance, setAvgAttendance] = useState<number | null>(null);
+  const [weeklyAttendance, setWeeklyAttendance] = useState(
+    WEEKDAY_LABELS.map((day) => ({ day, asistencia: 0 })),
+  );
 
   useEffect(() => {
     api
@@ -28,7 +35,7 @@ const Dashboard = () => {
       .catch(() => { /* deja el KPI en "—" si falla */ });
 
     api
-      .get<SessionAttendanceSummary[]>("/training-sessions/attendance-history/")
+      .get<SessionAttendanceItem[]>("/training-sessions/attendance-history/")
       .then(({ data }) => {
         if (data.length === 0) {
           setAvgAttendance(0);
@@ -36,8 +43,24 @@ const Dashboard = () => {
         }
         const avg = data.reduce((sum, s) => sum + s.summary.attendance_rate, 0) / data.length;
         setAvgAttendance(Math.round(avg));
+
+        // Asistencia por día de la semana en curso: promedia las sesiones de
+        // cada día (puede haber más de una) contra las ya registradas.
+        const monday = startOfWeek(new Date(), { weekStartsOn: 1 });
+        setWeeklyAttendance(
+          WEEKDAY_LABELS.map((day, i) => {
+            const date = addDays(monday, i);
+            const sessions = data.filter((s) =>
+              isSameDay(new Date(s.training_session.scheduled_at), date)
+            );
+            const asistencia = sessions.length
+              ? Math.round(sessions.reduce((sum, s) => sum + s.summary.attendance_rate, 0) / sessions.length)
+              : 0;
+            return { day, asistencia };
+          }),
+        );
       })
-      .catch(() => { /* deja el KPI en "—" si falla */ });
+      .catch(() => { /* deja el gráfico en 0 si falla */ });
   }, []);
 
   return (
@@ -92,7 +115,7 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <PerformanceChart />
-            <AttendanceChart />
+            <AttendanceChart data={weeklyAttendance} />
           </div>
           <div>
             <RecentActivity />
