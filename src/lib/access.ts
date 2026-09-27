@@ -7,10 +7,16 @@ import type { AuthUser } from "@/contexts/AuthContext";
  *
  * Los cuatro roles oficiales (no existe rol "padre" — los padres usan el
  * mismo rol y flujo que los jugadores):
- * - admin      → acceso total a todas las pantallas.
+ * - admin      → acceso total a todas las pantallas, excepto Portal
+ *                Futbolista: esa pantalla es la ficha personal de un
+ *                deportista (mis partidos, mis comentarios, mi asistencia) y
+ *                el backend la protege con `IsPlayerRole` en todos sus
+ *                endpoints — un admin no tiene perfil de deportista propio,
+ *                así que solo vería errores de carga si entrara.
  * - coach      → todo lo deportivo (deportistas, entrenadores, calendario,
  *                asistencia, rendimiento, squad builder); nada de
- *                Configuración, Pagos, Formularios ni Contenido.
+ *                Configuración, Pagos, Formularios, Contenido ni Portal
+ *                Futbolista (mismo motivo que admin).
  * - aux_admin  → únicamente Pagos, Formularios y Contenido.
  * - player     → únicamente Portal Futbolista (también representa a los padres).
  *
@@ -40,10 +46,14 @@ export function homePathFor(user: AuthUser | null): string {
 export function canAccessPath(user: AuthUser | null, path: string): boolean {
   if (!user) return false;
   if (path === SETTINGS_PATH) return true;
-  if (user.role === "admin") return true;
   // Las rutas con sub-recursos (p. ej. /players/:id) heredan el permiso de
   // su sección raíz ("/players"), no solo la coincidencia exacta.
   const section = path === "/" ? "/" : `/${path.split("/")[1]}`;
+  // Portal Futbolista es la ficha personal de un deportista: el backend la
+  // protege con `IsPlayerRole` en todos sus endpoints, así que ni admin ni
+  // coach pueden usarla aunque tengan acceso al resto de pantallas.
+  if (section === FAMILY_PATH) return user.role === "player";
+  if (user.role === "admin") return true;
   if (user.role === "coach") return COACH_PATHS.has(section);
   if (user.role === "aux_admin") return AUX_ADMIN_PATHS.has(section);
   return PLAYER_PATHS.has(section); // player
