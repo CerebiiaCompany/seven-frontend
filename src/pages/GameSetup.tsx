@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/DashboardLayout";
@@ -18,9 +18,14 @@ interface CategoryOption { id: string; name: string; groups: NamedRef[] }
 // Selección previa obligatoria antes de entrar al editor: sin categoría (y
 // grupo, si la categoría tiene) no hay de dónde cargar los jugadores del
 // equipo. Mismo catálogo y patrón que el formulario de eventos de Calendar.tsx.
+//
+// "Entrenamiento" (`/gamification/entrenamiento/nuevo`) usa esta misma
+// pantalla y el mismo editor (GameEditor), pero nunca crea un `TacticBoard`
+// en el backend — la sesión vive solo en memoria del navegador.
 const GameSetup = () => {
   const navigate = useNavigate();
-  const [name, setName] = useState("Nuevo juego");
+  const isTraining = useLocation().pathname.startsWith("/gamification/entrenamiento");
+  const [name, setName] = useState(isTraining ? "Sesión de entrenamiento" : "Nuevo juego");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState(false);
@@ -50,10 +55,22 @@ const GameSetup = () => {
   );
 
   const handleCreate = async () => {
-    if (!name.trim()) { toast.error("Ponle un nombre al juego"); return; }
+    if (!name.trim()) { toast.error(isTraining ? "Ponle un nombre a la sesión" : "Ponle un nombre al juego"); return; }
     if (!categoryId) { toast.error("Selecciona la categoría"); return; }
     if (selectedCategory && selectedCategory.groups.length > 0 && !groupId) {
       toast.error("Selecciona el grupo");
+      return;
+    }
+
+    if (isTraining) {
+      const group = groupId ? selectedCategory?.groups.find((g) => g.id === groupId) ?? null : null;
+      navigate("/gamification/entrenamiento", {
+        state: {
+          name: name.trim(),
+          category: selectedCategory ? { id: selectedCategory.id, name: selectedCategory.name } : null,
+          group: group ? { id: group.id, name: group.name } : null,
+        },
+      });
       return;
     }
 
@@ -78,25 +95,29 @@ const GameSetup = () => {
         <motion.button
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          onClick={() => navigate("/gamification")}
+          onClick={() => navigate(isTraining ? "/gamification?tab=training" : "/gamification")}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" /> Volver a Juegos
+          <ArrowLeft className="w-4 h-4" /> {isTraining ? "Volver a Entrenamiento" : "Volver a Juegos"}
         </motion.button>
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="max-w-md mx-auto">
           <Card className="p-6">
             <div className="flex items-center gap-2 mb-1">
               <Gamepad2 className="w-5 h-5 text-primary" />
-              <h1 className="text-lg font-display font-bold text-foreground">Nuevo juego</h1>
+              <h1 className="text-lg font-display font-bold text-foreground">
+                {isTraining ? "Nueva sesión de entrenamiento" : "Nuevo juego"}
+              </h1>
             </div>
             <p className="text-sm text-muted-foreground mb-6">
-              Elige la categoría y el grupo: sus jugadores quedarán disponibles en la pizarra.
+              {isTraining
+                ? "Elige la categoría y el grupo para cargar sus jugadores. Puedes guardarla como juego cuando quieras desde el editor."
+                : "Elige la categoría y el grupo: sus jugadores quedarán disponibles en la pizarra."}
             </p>
 
             <div className="space-y-4">
               <div>
-                <Label>Nombre del juego</Label>
+                <Label>{isTraining ? "Nombre de la sesión" : "Nombre del juego"}</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1.5" />
               </div>
 
@@ -146,7 +167,7 @@ const GameSetup = () => {
             </div>
 
             <Button className="w-full mt-6" onClick={handleCreate} disabled={creating}>
-              {creating ? "Creando..." : "Crear y abrir editor"}
+              {creating ? "Creando..." : isTraining ? "Abrir editor" : "Crear y abrir editor"}
             </Button>
           </Card>
         </motion.div>

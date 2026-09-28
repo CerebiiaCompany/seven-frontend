@@ -49,6 +49,8 @@ const App = () => (
             <Route path="/performance" element={<ProtectedRoute><Performance /></ProtectedRoute>} />
             <Route path="/gamification" element={<ProtectedRoute><Gamification /></ProtectedRoute>} />
             <Route path="/gamification/nuevo" element={<ProtectedRoute><GameSetup /></ProtectedRoute>} />
+            <Route path="/gamification/entrenamiento/nuevo" element={<ProtectedRoute><GameSetup /></ProtectedRoute>} />
+            <Route path="/gamification/entrenamiento" element={<ProtectedRoute><GameEditor /></ProtectedRoute>} />
             <Route path="/gamification/:id" element={<ProtectedRoute><GameEditor /></ProtectedRoute>} />
             <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
             <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />

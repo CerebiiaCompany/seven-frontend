@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -20,7 +20,7 @@ import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import api from "@/lib/api";
-import { type BoardDetail, getBoard, updateBoard, uploadThumbnail } from "./Games";
+import { type BoardDetail, createBoard, getBoard, updateBoard, uploadThumbnail } from "./Games";
 
 // ---------------------------------------------------------------------------
 // Tipos de la escena (guardada en `board.scene`, JSON libre en el backend)
@@ -220,10 +220,23 @@ const LineStyleEditor = ({ value, onChange }: { value: LineStyle; onChange: (pat
 // Editor
 // ---------------------------------------------------------------------------
 
+// Estado que trae `GameSetup.tsx` al navegar aquí desde
+// `/gamification/entrenamiento/nuevo` (sin `:id`, sin `TacticBoard` en el backend).
+interface TrainingSetupState {
+  name: string;
+  category: { id: string; name: string } | null;
+  group: { id: string; name: string } | null;
+}
+
 const GameEditor = () => {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const fieldRef = useRef<HTMLDivElement>(null);
+
+  // Sin `:id` en la ruta = sesión de entrenamiento: arranca solo en memoria,
+  // sin `TacticBoard` real, hasta que se presiona "Guardar" (ver handleSave).
+  const isTraining = !id;
 
   const [board, setBoard] = useState<BoardDetail | null>(null);
   const [name, setName] = useState("");
@@ -268,6 +281,31 @@ const GameEditor = () => {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!isTraining) return;
+    const state = (location.state as TrainingSetupState | null) ?? null;
+    const now = new Date().toISOString();
+    setBoard({
+      id: "training",
+      name: state?.name || "Sesión de entrenamiento",
+      board_type: "training",
+      category: state?.category ?? null,
+      group: state?.group ?? null,
+      thumbnail: null,
+      created_by_name: "",
+      created_at: now,
+      updated_at: now,
+      court_type: "full",
+      field_color: "green",
+      mirrored: false,
+      player_settings: {},
+      scene: { objects: [], lines: [] },
+    });
+    setName(state?.name || "Sesión de entrenamiento");
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTraining]);
 
   useEffect(() => {
     if (!board) return;
@@ -415,6 +453,41 @@ const GameEditor = () => {
   };
 
   const handleSave = async () => {
+    // Sesión de entrenamiento sin guardar todavía: primer "Guardar" la
+    // convierte en un `TacticBoard` real (igual que crear un juego), y de
+    // ahí en adelante se edita como cualquier juego guardado.
+    if (isTraining) {
+      if (!board?.category) {
+        toast.error("No se puede guardar sin categoría: vuelve a crear la sesión eligiendo categoría y grupo");
+        return;
+      }
+      setSaving(true);
+      try {
+        const created = await createBoard({
+          name: name.trim() || board.name,
+          category_id: board.category.id,
+          board_type: "training",
+          ...(board.group ? { group_id: board.group.id } : {}),
+        });
+        await updateBoard(created.id, {
+          court_type: courtType,
+          field_color: fieldColor,
+          mirrored,
+          player_settings: playerSettings as unknown as Record<string, unknown>,
+          scene,
+        });
+        const blob = await captureThumbnail();
+        if (blob) await uploadThumbnail(created.id, blob);
+        toast.success("Sesión guardada");
+        navigate(`/gamification/${created.id}`, { replace: true });
+      } catch {
+        toast.error("No se pudo guardar la sesión");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     if (!id) return;
     setSaving(true);
     try {
@@ -482,11 +555,18 @@ const GameEditor = () => {
     return (
       <DashboardLayout>
         <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px]">
-          <Card className="p-6 text-sm text-muted-foreground">Cargando juego...</Card>
+          <Card className="p-6 text-sm text-muted-foreground">
+            {isTraining ? "Cargando sesión..." : "Cargando juego..."}
+          </Card>
         </div>
       </DashboardLayout>
     );
   }
+
+  // Para el link "Volver": una sesión sin guardar (`isTraining`) o un juego
+  // ya guardado con `board_type: "training"` (reabierto desde el historial)
+  // vuelven a la pestaña Entrenamiento, no a Juegos.
+  const isTrainingView = isTraining || board.board_type === "training";
 
   const { ends: markerEnds, colors: markerColors } = allMarkers();
 
@@ -495,10 +575,10 @@ const GameEditor = () => {
       <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px]">
         <motion.button
           initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          onClick={() => navigate("/gamification")}
+          onClick={() => navigate(isTrainingView ? "/gamification?tab=training" : "/gamification")}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" /> Volver a Juegos
+          <ArrowLeft className="w-4 h-4" /> {isTrainingView ? "Volver a Entrenamiento" : "Volver a Juegos"}
         </motion.button>
 
         {/* Header */}
@@ -507,6 +587,7 @@ const GameEditor = () => {
           <div className="flex items-center gap-1.5">
             {board.category && <Badge variant="secondary">{board.category.name}</Badge>}
             {board.group && <Badge variant="secondary">{board.group.name}</Badge>}
+            {isTraining && <Badge variant="outline">Sin guardar</Badge>}
           </div>
           <div className="flex items-center gap-2 sm:ml-auto">
             <Button variant="outline" size="icon" onClick={() => setSettingsOpen(true)} title="Ajustes">

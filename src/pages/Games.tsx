@@ -9,9 +9,12 @@ import api from "@/lib/api";
 export interface BoardCategory { id: string; name: string }
 export interface BoardGroup { id: string; name: string }
 
+export type BoardType = "game" | "training";
+
 export interface BoardListItem {
   id: string;
   name: string;
+  board_type: BoardType;
   category: BoardCategory | null;
   group: BoardGroup | null;
   thumbnail: string | null;
@@ -33,7 +36,7 @@ export interface BoardDetail extends BoardListItem {
   scene: BoardScene;
 }
 
-export const listBoards = async (params?: { category?: string; group?: string }) => {
+export const listBoards = async (params?: { category?: string; group?: string; board_type?: BoardType }) => {
   const { data } = await api.get<{ results: BoardListItem[]; count: number }>("/boards/", { params });
   return data;
 };
@@ -43,7 +46,9 @@ export const getBoard = async (id: string) => {
   return data;
 };
 
-export const createBoard = async (payload: { name: string; category_id: string; group_id?: string }) => {
+export const createBoard = async (payload: {
+  name: string; category_id: string; group_id?: string; board_type?: BoardType;
+}) => {
   const { data } = await api.post<BoardDetail>("/boards/", payload);
   return data;
 };
