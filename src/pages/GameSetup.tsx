@@ -12,63 +12,71 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import api from "@/lib/api";
 import { createBoard } from "./Games";
 
-interface NamedRef { id: string; name: string }
-interface CategoryOption { id: string; name: string; groups: NamedRef[] }
+interface EventOption {
+  id: string;
+  title: string;
+  scheduled_at: string;
+  category: string | null;
+  category_id: string | null;
+  group: string | null;
+  group_id: string | null;
+}
 
-// Selección previa obligatoria antes de entrar al editor: sin categoría (y
-// grupo, si la categoría tiene) no hay de dónde cargar los jugadores del
-// equipo. Mismo catálogo y patrón que el formulario de eventos de Calendar.tsx.
-//
-// "Entrenamiento" (`/gamification/entrenamiento/nuevo`) usa esta misma
-// pantalla y el mismo editor (GameEditor), pero nunca crea un `TacticBoard`
-// en el backend — la sesión vive solo en memoria del navegador.
+const formatEventLabel = (e: EventOption) => {
+  const dt = new Date(e.scheduled_at);
+  const date = dt.toLocaleDateString("es-CO", { day: "2-digit", month: "short" });
+  const time = dt.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const team = e.category ? ` · ${e.category}${e.group ? ` ${e.group}` : ""}` : "";
+  return `${date} ${time} — ${e.title}${team}`;
+};
+
+// El juego/sesión siempre nace ligado a un evento real del calendario:
+// "Juegos" elige entre los partidos creados, "Entrenamiento" entre los
+// entrenamientos — categoría, grupo y jugadores se heredan de ese evento
+// (relación FK con `TrainingSession`), nunca se piden aparte.
 const GameSetup = () => {
   const navigate = useNavigate();
   const isTraining = useLocation().pathname.startsWith("/gamification/entrenamiento");
   const [name, setName] = useState(isTraining ? "Sesión de entrenamiento" : "Nuevo juego");
-  const [categories, setCategories] = useState<CategoryOption[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [categoriesError, setCategoriesError] = useState(false);
-  const [categoryId, setCategoryId] = useState("");
-  const [groupId, setGroupId] = useState("");
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState(false);
+  const [sessionId, setSessionId] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const loadCategories = useCallback(async () => {
-    setCategoriesLoading(true);
-    setCategoriesError(false);
+  const loadEvents = useCallback(async () => {
+    setEventsLoading(true);
+    setEventsError(false);
     try {
-      const { data } = await api.get<CategoryOption[]>("/categories/");
-      setCategories(data);
+      const { data } = await api.get<{ results: EventOption[] }>("/training-sessions/", {
+        params: { event_type: isTraining ? "training" : "match", page_size: 100 },
+      });
+      setEvents(data.results);
     } catch {
-      setCategoriesError(true);
-      toast.error("No se pudieron cargar las categorías");
+      setEventsError(true);
+      toast.error(isTraining ? "No se pudieron cargar los entrenamientos" : "No se pudieron cargar los partidos");
     } finally {
-      setCategoriesLoading(false);
+      setEventsLoading(false);
     }
-  }, []);
+  }, [isTraining]);
 
-  useEffect(() => { loadCategories(); }, [loadCategories]);
+  useEffect(() => { loadEvents(); }, [loadEvents]);
 
-  const selectedCategory = useMemo(
-    () => categories.find((c) => c.id === categoryId) ?? null,
-    [categories, categoryId]
-  );
+  const selectedEvent = useMemo(() => events.find((e) => e.id === sessionId) ?? null, [events, sessionId]);
 
   const handleCreate = async () => {
     if (!name.trim()) { toast.error(isTraining ? "Ponle un nombre a la sesión" : "Ponle un nombre al juego"); return; }
-    if (!categoryId) { toast.error("Selecciona la categoría"); return; }
-    if (selectedCategory && selectedCategory.groups.length > 0 && !groupId) {
-      toast.error("Selecciona el grupo");
-      return;
-    }
+    if (!sessionId) { toast.error(isTraining ? "Selecciona el entrenamiento" : "Selecciona el partido"); return; }
 
     if (isTraining) {
-      const group = groupId ? selectedCategory?.groups.find((g) => g.id === groupId) ?? null : null;
       navigate("/gamification/entrenamiento", {
         state: {
           name: name.trim(),
-          category: selectedCategory ? { id: selectedCategory.id, name: selectedCategory.name } : null,
-          group: group ? { id: group.id, name: group.name } : null,
+          trainingSessionId: sessionId,
+          sessionTitle: selectedEvent?.title ?? "",
+          sessionScheduledAt: selectedEvent?.scheduled_at ?? "",
+          category: selectedEvent?.category_id ? { id: selectedEvent.category_id, name: selectedEvent.category! } : null,
+          group: selectedEvent?.group_id ? { id: selectedEvent.group_id, name: selectedEvent.group! } : null,
         },
       });
       return;
@@ -76,11 +84,7 @@ const GameSetup = () => {
 
     setCreating(true);
     try {
-      const board = await createBoard({
-        name: name.trim(),
-        category_id: categoryId,
-        ...(groupId ? { group_id: groupId } : {}),
-      });
+      const board = await createBoard({ name: name.trim(), training_session_id: sessionId });
       navigate(`/gamification/${board.id}`);
     } catch {
       toast.error("No se pudo crear el juego");
@@ -93,8 +97,7 @@ const GameSetup = () => {
     <DashboardLayout>
       <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px]">
         <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           onClick={() => navigate(isTraining ? "/gamification?tab=training" : "/gamification")}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
         >
@@ -111,8 +114,8 @@ const GameSetup = () => {
             </div>
             <p className="text-sm text-muted-foreground mb-6">
               {isTraining
-                ? "Elige la categoría y el grupo para cargar sus jugadores. Puedes guardarla como juego cuando quieras desde el editor."
-                : "Elige la categoría y el grupo: sus jugadores quedarán disponibles en la pizarra."}
+                ? "Elige el entrenamiento del calendario: categoría, grupo y jugadores se cargan de ahí."
+                : "Elige el partido del calendario: categoría, grupo y jugadores se cargan de ahí."}
             </p>
 
             <div className="space-y-4">
@@ -122,51 +125,37 @@ const GameSetup = () => {
               </div>
 
               <div>
-                <Label>Categoría</Label>
+                <Label>{isTraining ? "Entrenamiento" : "Partido"}</Label>
                 <Select
-                  value={categoryId}
-                  onValueChange={(v) => { setCategoryId(v); setGroupId(""); }}
-                  disabled={categoriesLoading || categories.length === 0}
+                  value={sessionId}
+                  onValueChange={setSessionId}
+                  disabled={eventsLoading || events.length === 0}
                 >
                   <SelectTrigger className="mt-1.5">
-                    <SelectValue placeholder={categoriesLoading ? "Cargando categorías..." : "Selecciona una categoría"} />
+                    <SelectValue
+                      placeholder={eventsLoading ? "Cargando..." : isTraining ? "Selecciona un entrenamiento" : "Selecciona un partido"}
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    {events.map((e) => <SelectItem key={e.id} value={e.id}>{formatEventLabel(e)}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                {categoriesError ? (
+                {eventsError ? (
                   <p className="text-xs text-destructive mt-1.5">
-                    No se pudieron cargar las categorías.{" "}
-                    <button type="button" className="underline" onClick={loadCategories}>Reintentar</button>
+                    No se pudieron cargar los eventos.{" "}
+                    <button type="button" className="underline" onClick={loadEvents}>Reintentar</button>
                   </p>
-                ) : !categoriesLoading && categories.length === 0 ? (
+                ) : !eventsLoading && events.length === 0 ? (
                   <p className="text-xs text-muted-foreground mt-1.5">
-                    No hay categorías creadas. Crea una desde Configuración del club.
+                    {isTraining
+                      ? "No hay entrenamientos creados. Créalos primero desde el Calendario."
+                      : "No hay partidos creados. Créalos primero desde el Calendario."}
                   </p>
                 ) : null}
               </div>
-
-              <div>
-                <Label>Grupo</Label>
-                {!selectedCategory ? (
-                  <Select disabled>
-                    <SelectTrigger className="mt-1.5"><SelectValue placeholder="Selecciona primero una categoría" /></SelectTrigger>
-                  </Select>
-                ) : selectedCategory.groups.length === 0 ? (
-                  <p className="text-xs text-muted-foreground mt-1.5">Esta categoría no tiene grupos creados.</p>
-                ) : (
-                  <Select value={groupId} onValueChange={setGroupId}>
-                    <SelectTrigger className="mt-1.5"><SelectValue placeholder="Selecciona un grupo" /></SelectTrigger>
-                    <SelectContent>
-                      {selectedCategory.groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
             </div>
 
-            <Button className="w-full mt-6" onClick={handleCreate} disabled={creating}>
+            <Button className="w-full mt-6" onClick={handleCreate} disabled={creating || eventsLoading || events.length === 0}>
               {creating ? "Creando..." : isTraining ? "Abrir editor" : "Crear y abrir editor"}
             </Button>
           </Card>

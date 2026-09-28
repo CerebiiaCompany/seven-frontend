@@ -224,6 +224,9 @@ const LineStyleEditor = ({ value, onChange }: { value: LineStyle; onChange: (pat
 // `/gamification/entrenamiento/nuevo` (sin `:id`, sin `TacticBoard` en el backend).
 interface TrainingSetupState {
   name: string;
+  trainingSessionId: string;
+  sessionTitle: string;
+  sessionScheduledAt: string;
   category: { id: string; name: string } | null;
   group: { id: string; name: string } | null;
 }
@@ -261,6 +264,7 @@ const GameEditor = () => {
   const [lineDraft, setLineDraft] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
 
   const [roster, setRoster] = useState<{ id: string; name: string; position: string }[]>([]);
+  const [trainingSessionId, setTrainingSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -292,6 +296,9 @@ const GameEditor = () => {
       board_type: "training",
       category: state?.category ?? null,
       group: state?.group ?? null,
+      training_session: state?.trainingSessionId
+        ? { id: state.trainingSessionId, title: state.sessionTitle || "", event_type: "training", scheduled_at: state.sessionScheduledAt || now }
+        : null,
       thumbnail: null,
       created_by_name: "",
       created_at: now,
@@ -302,6 +309,7 @@ const GameEditor = () => {
       player_settings: {},
       scene: { objects: [], lines: [] },
     });
+    setTrainingSessionId(state?.trainingSessionId ?? null);
     setName(state?.name || "Sesión de entrenamiento");
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -457,17 +465,15 @@ const GameEditor = () => {
     // convierte en un `TacticBoard` real (igual que crear un juego), y de
     // ahí en adelante se edita como cualquier juego guardado.
     if (isTraining) {
-      if (!board?.category) {
-        toast.error("No se puede guardar sin categoría: vuelve a crear la sesión eligiendo categoría y grupo");
+      if (!trainingSessionId) {
+        toast.error("No se puede guardar: vuelve a crear la sesión eligiendo el entrenamiento del calendario");
         return;
       }
       setSaving(true);
       try {
         const created = await createBoard({
-          name: name.trim() || board.name,
-          category_id: board.category.id,
-          board_type: "training",
-          ...(board.group ? { group_id: board.group.id } : {}),
+          name: name.trim() || board?.name || "Sesión de entrenamiento",
+          training_session_id: trainingSessionId,
         });
         await updateBoard(created.id, {
           court_type: courtType,
@@ -584,9 +590,16 @@ const GameEditor = () => {
         {/* Header */}
         <div className="glass-card p-3 sm:p-4 mb-3 sm:mb-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <Input value={name} onChange={(e) => setName(e.target.value)} className="max-w-xs" />
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {board.category && <Badge variant="secondary">{board.category.name}</Badge>}
             {board.group && <Badge variant="secondary">{board.group.name}</Badge>}
+            {board.training_session && (
+              <Badge variant="outline">
+                {new Date(board.training_session.scheduled_at).toLocaleString("es-CO", {
+                  day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
+                })}
+              </Badge>
+            )}
             {isTraining && <Badge variant="outline">Sin guardar</Badge>}
           </div>
           <div className="flex items-center gap-2 sm:ml-auto">

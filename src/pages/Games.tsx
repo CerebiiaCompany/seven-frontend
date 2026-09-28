@@ -11,12 +11,20 @@ export interface BoardGroup { id: string; name: string }
 
 export type BoardType = "game" | "training";
 
+export interface BoardTrainingSession {
+  id: string;
+  title: string;
+  event_type: "training" | "match" | "evaluation" | "meeting";
+  scheduled_at: string;
+}
+
 export interface BoardListItem {
   id: string;
   name: string;
   board_type: BoardType;
   category: BoardCategory | null;
   group: BoardGroup | null;
+  training_session: BoardTrainingSession | null;
   thumbnail: string | null;
   created_by_name: string;
   created_at: string;
@@ -46,9 +54,7 @@ export const getBoard = async (id: string) => {
   return data;
 };
 
-export const createBoard = async (payload: {
-  name: string; category_id: string; group_id?: string; board_type?: BoardType;
-}) => {
+export const createBoard = async (payload: { name: string; training_session_id: string }) => {
   const { data } = await api.post<BoardDetail>("/boards/", payload);
   return data;
 };

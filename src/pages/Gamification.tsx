@@ -177,6 +177,11 @@ const Gamification = () => {
                       {board.group && <Badge variant="secondary" className="text-[10px]">{board.group.name}</Badge>}
                     </div>
                     <div className="mt-2 space-y-0.5">
+                      {board.training_session && (
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 truncate">
+                          <Clock className="w-3 h-3 flex-shrink-0" /> {board.training_session.title} · {formatDateTime(board.training_session.scheduled_at)}
+                        </p>
+                      )}
                       <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" /> Creado: {formatDateTime(board.created_at)}
                       </p>
