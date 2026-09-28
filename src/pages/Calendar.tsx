@@ -60,6 +60,16 @@ interface CategoryOption {
   groups: NamedRef[];
 }
 
+interface VenueOption {
+  id: string;
+  name: string;
+  site: string;
+}
+
+const NO_VENUE = "none";
+
+const venueLabel = (v: VenueOption) => (v.site ? `${v.name} — ${v.site}` : v.name);
+
 interface CoachCategoryAssignment {
   category_id: string;
   category_name: string;
@@ -102,7 +112,7 @@ const mapEvent = (r: ApiTrainingSession): EventItem => {
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-const emptyForm = { type: "training", title: "", date: "", time: "", location: "", categoryId: "", groupId: "" };
+const emptyForm = { type: "training", title: "", date: "", time: "", venueId: "", categoryId: "", groupId: "" };
 
 export default function CalendarPage() {
   const { user } = useAuth();
@@ -119,6 +129,24 @@ export default function CalendarPage() {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [categoriesError, setCategoriesError] = useState(false);
+  const [venues, setVenues] = useState<VenueOption[]>([]);
+  const [venuesLoading, setVenuesLoading] = useState(false);
+  const [venuesError, setVenuesError] = useState(false);
+
+  // Mismo catálogo de sedes que Configuración del club > Sedes (`/venues/`).
+  const loadVenues = useCallback(async () => {
+    setVenuesLoading(true);
+    setVenuesError(false);
+    try {
+      const { data } = await api.get<VenueOption[]>("/venues/");
+      setVenues(data);
+    } catch {
+      setVenuesError(true);
+      toast.error("No se pudieron cargar las sedes");
+    } finally {
+      setVenuesLoading(false);
+    }
+  }, []);
 
   // Un entrenador solo puede crear eventos para sus propias categorías/grupos
   // a cargo (`/coaches/me/categories/`); admin/aux ven el catálogo completo
@@ -208,7 +236,7 @@ export default function CalendarPage() {
         title: form.title.trim(),
         event_type: form.type,
         scheduled_at: scheduledAt,
-        location: form.location.trim(),
+        venue_id: form.venueId || null,
         category_id: form.categoryId,
         group_id: form.groupId || null,
       });
@@ -258,8 +286,12 @@ export default function CalendarPage() {
               open={createOpen}
               onOpenChange={(o) => {
                 setCreateOpen(o);
-                if (o) loadCategories();
-                else setForm(emptyForm);
+                if (o) {
+                  loadCategories();
+                  loadVenues();
+                } else {
+                  setForm(emptyForm);
+                }
               }}
             >
               <DialogTrigger asChild>
@@ -353,11 +385,33 @@ export default function CalendarPage() {
                   </div>
                   <div>
                     <Label>Ubicación</Label>
-                    <Input
-                      placeholder="Cancha 1"
-                      value={form.location}
-                      onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                    />
+                    <Select
+                      value={form.venueId || NO_VENUE}
+                      onValueChange={(v) => setForm((f) => ({ ...f, venueId: v === NO_VENUE ? "" : v }))}
+                      disabled={venuesLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={venuesLoading ? "Cargando sedes..." : "Selecciona una sede"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_VENUE}>Sin sede específica</SelectItem>
+                        {venues.map((v) => (
+                          <SelectItem key={v.id} value={v.id}>{venueLabel(v)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {venuesError ? (
+                      <p className="text-xs text-destructive mt-1">
+                        No se pudieron cargar las sedes.{" "}
+                        <button type="button" className="underline" onClick={loadVenues}>
+                          Reintentar
+                        </button>
+                      </p>
+                    ) : !venuesLoading && venues.length === 0 ? (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        No hay sedes creadas. Créalas desde Configuración del club.
+                      </p>
+                    ) : null}
                   </div>
                   <Button
                     className="w-full"
