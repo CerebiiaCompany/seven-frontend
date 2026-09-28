@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from "@/hooks/use-toast";
 import {
   Trophy, TrendingUp, Calendar, MessageSquare, Bell, CreditCard,
-  Star, Target, Activity, ChevronRight, CheckCircle2, Clock, Plus, Trash2, Loader2
+  Star, Target, Activity, ChevronRight, CheckCircle2, Clock, Plus, Trash2, Loader2, MapPin
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
 import api from "@/lib/api";
@@ -35,6 +35,7 @@ interface TrainingEvent {
   event_type: "training" | "match" | "evaluation" | "meeting";
   scheduled_at: string;
   location: string;
+  venue_maps_url: string | null;
   category: string | null;
   group: string | null;
   coach_name: string | null;
@@ -77,6 +78,7 @@ interface PlayerMatchStat {
   event_title: string;
   scheduled_at: string;
   location: string;
+  venue_maps_url: string | null;
   score_for: number;
   score_against: number;
   goals: number;
@@ -950,9 +952,22 @@ export default function Family() {
                   <span className="font-medium">{eventTime(selectedEvent.scheduled_at)}</span>
                 </div>
                 {selectedEvent.location && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Lugar</span>
-                    <span className="font-medium">{selectedEvent.location}</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground flex-shrink-0">Lugar</span>
+                    <span className="font-medium text-right flex items-center gap-1.5">
+                      {selectedEvent.location}
+                      {selectedEvent.venue_maps_url && (
+                        <button
+                          type="button"
+                          aria-label="Ver ubicación en Google Maps"
+                          title="Ver ubicación en Google Maps"
+                          onClick={() => window.open(selectedEvent.venue_maps_url!, "_blank", "noopener,noreferrer")}
+                          className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-primary/30 text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          <MapPin className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </span>
                   </div>
                 )}
                 {selectedEvent.category && (
@@ -998,9 +1013,22 @@ export default function Family() {
                   <span className="font-medium">{eventTime(selectedMatchStat.scheduled_at)}</span>
                 </div>
                 {selectedMatchStat.location && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Lugar</span>
-                    <span className="font-medium">{selectedMatchStat.location}</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground flex-shrink-0">Lugar</span>
+                    <span className="font-medium text-right flex items-center gap-1.5">
+                      {selectedMatchStat.location}
+                      {selectedMatchStat.venue_maps_url && (
+                        <button
+                          type="button"
+                          aria-label="Ver ubicación en Google Maps"
+                          title="Ver ubicación en Google Maps"
+                          onClick={() => window.open(selectedMatchStat.venue_maps_url!, "_blank", "noopener,noreferrer")}
+                          className="inline-flex items-center justify-center w-6 h-6 rounded-md border border-primary/30 text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          <MapPin className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
