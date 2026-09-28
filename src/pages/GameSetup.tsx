@@ -147,7 +147,7 @@ const GameSetup = () => {
                 <Select
                   value={sessionId}
                   onValueChange={setSessionId}
-                  disabled={eventsLoading || events.length === 0}
+                  disabled={eventsLoading || availableEvents.length === 0}
                 >
                   <SelectTrigger className="mt-1.5">
                     <SelectValue
@@ -155,14 +155,9 @@ const GameSetup = () => {
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    {events.map((e) => {
-                      const used = usedSessionIds.has(e.id);
-                      return (
-                        <SelectItem key={e.id} value={e.id} disabled={used}>
-                          {formatEventLabel(e)}{used ? (isTraining ? " · ya tiene sesión" : " · ya tiene juego") : ""}
-                        </SelectItem>
-                      );
-                    })}
+                    {availableEvents.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{formatEventLabel(e)}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {eventsError ? (
@@ -186,7 +181,7 @@ const GameSetup = () => {
               </div>
             </div>
 
-            <Button className="w-full mt-6" onClick={handleCreate} disabled={creating || eventsLoading || events.length === 0}>
+            <Button className="w-full mt-6" onClick={handleCreate} disabled={creating || eventsLoading || availableEvents.length === 0}>
               {creating ? "Creando..." : isTraining ? "Abrir editor" : "Crear y abrir editor"}
             </Button>
           </Card>
