@@ -229,7 +229,22 @@ export function UsersPanel() {
     setAssignLoading(true);
     try {
       const { data } = await api.get<CoachAssignment[]>(`/users/${user.id}/categories/`);
-      setAssignSelected(new Set(data.map((a) => assignmentKey(a.category_id, a.group_id))));
+      const next = new Set<string>();
+      for (const a of data) {
+        if (a.group_id) {
+          next.add(assignmentKey(a.category_id, a.group_id));
+          continue;
+        }
+        // Asignación a "toda la categoría": si tiene grupos, se refleja
+        // marcando cada uno (el checkbox de categoría es un agregado de sus grupos).
+        const cat = categories.find((c) => c.id === a.category_id);
+        if (cat && cat.groups.length > 0) {
+          cat.groups.forEach((g) => next.add(assignmentKey(a.category_id, g.id)));
+        } else {
+          next.add(assignmentKey(a.category_id));
+        }
+      }
+      setAssignSelected(next);
     } catch (error) {
       toast({ title: "No se pudieron cargar las categorías del entrenador", variant: "destructive" });
     } finally {
@@ -237,11 +252,40 @@ export function UsersPanel() {
     }
   };
 
-  const toggleAssignment = (key: string) => {
+  // El checkbox de una categoría con grupos es solo un agregado: refleja si
+  // todos sus grupos están marcados, nunca se guarda como selección propia.
+  const isCategoryChecked = (cat: CategoryOption) =>
+    cat.groups.length > 0
+      ? cat.groups.every((g) => assignSelected.has(assignmentKey(cat.id, g.id)))
+      : assignSelected.has(assignmentKey(cat.id));
+
+  const toggleCategory = (cat: CategoryOption) => {
     setAssignSelected((prev) => {
       const next = new Set(prev);
+      if (cat.groups.length === 0) {
+        const key = assignmentKey(cat.id);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      }
+      const allSelected = cat.groups.every((g) => next.has(assignmentKey(cat.id, g.id)));
+      cat.groups.forEach((g) => {
+        const key = assignmentKey(cat.id, g.id);
+        if (allSelected) next.delete(key);
+        else next.add(key);
+      });
+      return next;
+    });
+  };
+
+  const toggleGroup = (cat: CategoryOption, group: CategoryGroupOption) => {
+    setAssignSelected((prev) => {
+      const next = new Set(prev);
+      const key = assignmentKey(cat.id, group.id);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      // nunca coexiste una entrada de "toda la categoría" con selección por grupo
+      next.delete(assignmentKey(cat.id));
       return next;
     });
   };
@@ -516,11 +560,11 @@ export function UsersPanel() {
               {categories.map((cat) => (
                 <div key={cat.id} className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-                    <Checkbox
-                      checked={assignSelected.has(assignmentKey(cat.id))}
-                      onCheckedChange={() => toggleAssignment(assignmentKey(cat.id))}
-                    />
-                    {cat.name} <span className="text-xs font-normal text-muted-foreground">(toda la categoría)</span>
+                    <Checkbox checked={isCategoryChecked(cat)} onCheckedChange={() => toggleCategory(cat)} />
+                    {cat.name}{" "}
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {cat.groups.length > 0 ? "(todos los grupos)" : "(toda la categoría)"}
+                    </span>
                   </label>
                   {cat.groups.length > 0 && (
                     <div className="pl-6 space-y-1.5">
@@ -528,7 +572,7 @@ export function UsersPanel() {
                         <label key={g.id} className="flex items-center gap-2 text-sm cursor-pointer">
                           <Checkbox
                             checked={assignSelected.has(assignmentKey(cat.id, g.id))}
-                            onCheckedChange={() => toggleAssignment(assignmentKey(cat.id, g.id))}
+                            onCheckedChange={() => toggleGroup(cat, g)}
                           />
                           Grupo {g.name}
                         </label>
