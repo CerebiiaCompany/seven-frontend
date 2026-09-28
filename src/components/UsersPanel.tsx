@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
-import { Copy, Loader2, Plus, Trash2, Users, UserX } from "lucide-react";
+import { Copy, Loader2, Plus, Tags, Trash2, Users, UserX } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -46,6 +47,30 @@ interface NewUserCredentials {
   password: string;
 }
 
+interface CategoryGroupOption {
+  id: string;
+  name: string;
+}
+
+interface CategoryOption {
+  id: string;
+  name: string;
+  groups: CategoryGroupOption[];
+}
+
+interface CoachAssignment {
+  category_id: string;
+  category_name: string;
+  group_id: string | null;
+  group_name: string | null;
+  label: string;
+}
+
+// Clave de selección en el diálogo de asignación: "categoryId" (toda la
+// categoría, sin grupo) o "categoryId:groupId" (un grupo puntual).
+const assignmentKey = (categoryId: string, groupId?: string | null) =>
+  groupId ? `${categoryId}:${groupId}` : categoryId;
+
 const emptyInvite = { first_name: "", last_name: "", email: "", phone_number: "", role: "" };
 
 // El registro público (`/auth/register/`) exige datos de deportista + acudiente
@@ -74,6 +99,11 @@ export function UsersPanel() {
   const [credentials, setCredentials] = useState<NewUserCredentials | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [assignTarget, setAssignTarget] = useState<AdminUser | null>(null);
+  const [assignSelected, setAssignSelected] = useState<Set<string>>(new Set());
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignSaving, setAssignSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,6 +115,12 @@ export function UsersPanel() {
       setDenied(false);
       setUsers(usersRes.data);
       setRoles(rolesRes.data);
+      try {
+        const { data } = await api.get<CategoryOption[]>("/categories/");
+        setCategories(data);
+      } catch {
+        /* si no puede cargar categorías, el botón de asignar simplemente no tendrá opciones */
+      }
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 403) {
         setDenied(true);
@@ -185,6 +221,47 @@ export function UsersPanel() {
     if (!credentials) return;
     await navigator.clipboard.writeText(credentials.password);
     toast({ title: "Contraseña copiada." });
+  };
+
+  const openAssign = async (user: AdminUser) => {
+    setAssignTarget(user);
+    setAssignSelected(new Set());
+    setAssignLoading(true);
+    try {
+      const { data } = await api.get<CoachAssignment[]>(`/users/${user.id}/categories/`);
+      setAssignSelected(new Set(data.map((a) => assignmentKey(a.category_id, a.group_id))));
+    } catch (error) {
+      toast({ title: "No se pudieron cargar las categorías del entrenador", variant: "destructive" });
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  const toggleAssignment = (key: string) => {
+    setAssignSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const saveAssignments = async () => {
+    if (!assignTarget) return;
+    const items = Array.from(assignSelected).map((key) => {
+      const [categoryId, groupId] = key.split(":");
+      return groupId ? { category_id: categoryId, group_id: groupId } : { category_id: categoryId };
+    });
+    setAssignSaving(true);
+    try {
+      await api.put(`/users/${assignTarget.id}/categories/`, { items });
+      toast({ title: "Categorías asignadas correctamente." });
+      setAssignTarget(null);
+    } catch (error) {
+      toast({ title: "No se pudieron guardar las categorías", variant: "destructive" });
+    } finally {
+      setAssignSaving(false);
+    }
   };
 
   const filteredUsers = roleFilter === "all" ? users : users.filter((u) => u.role === roleFilter);
@@ -378,6 +455,11 @@ export function UsersPanel() {
                       {roles.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  {u.role === "coach" && (
+                    <Button variant="outline" size="sm" className="gap-1.5 flex-shrink-0" onClick={() => openAssign(u)}>
+                      <Tags className="w-3.5 h-3.5" /> Asignar categorías
+                    </Button>
+                  )}
                   {u.id !== currentUser?.id && (
                     <Button variant="ghost" size="icon" className="text-destructive" onClick={() => setDeleteTarget(u)}>
                       <Trash2 className="w-4 h-4" />
@@ -409,6 +491,61 @@ export function UsersPanel() {
             <Button type="button" variant="destructive" className="gap-2" onClick={confirmDelete} disabled={deleting}>
               {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
               {deleting ? "Eliminando..." : "Eliminar definitivamente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!assignTarget} onOpenChange={(o) => !o && !assignSaving && setAssignTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Asignar categorías a {assignTarget?.full_name || "el entrenador"}</DialogTitle>
+            <DialogDescription>
+              Marca las categorías o grupos a cargo de este entrenador. Una misma categoría o grupo puede tener
+              varios entrenadores asignados a la vez.
+            </DialogDescription>
+          </DialogHeader>
+          {assignLoading ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">Cargando categorías...</p>
+          ) : categories.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Todavía no hay categorías creadas. Créalas en "Equipos y categorías" primero.
+            </p>
+          ) : (
+            <div className="space-y-4 pt-1 max-h-[50vh] overflow-y-auto themed-scroll pr-1">
+              {categories.map((cat) => (
+                <div key={cat.id} className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                    <Checkbox
+                      checked={assignSelected.has(assignmentKey(cat.id))}
+                      onCheckedChange={() => toggleAssignment(assignmentKey(cat.id))}
+                    />
+                    {cat.name} <span className="text-xs font-normal text-muted-foreground">(toda la categoría)</span>
+                  </label>
+                  {cat.groups.length > 0 && (
+                    <div className="pl-6 space-y-1.5">
+                      {cat.groups.map((g) => (
+                        <label key={g.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <Checkbox
+                            checked={assignSelected.has(assignmentKey(cat.id, g.id))}
+                            onCheckedChange={() => toggleAssignment(assignmentKey(cat.id, g.id))}
+                          />
+                          Grupo {g.name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter className="pt-2 gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setAssignTarget(null)} disabled={assignSaving}>
+              Cancelar
+            </Button>
+            <Button type="button" className="gap-2" onClick={saveAssignments} disabled={assignSaving || assignLoading}>
+              {assignSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {assignSaving ? "Guardando..." : "Guardar"}
             </Button>
           </DialogFooter>
         </DialogContent>
