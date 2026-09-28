@@ -21,6 +21,7 @@ import {
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface EventItem {
   id: string;
@@ -59,6 +60,30 @@ interface CategoryOption {
   groups: NamedRef[];
 }
 
+interface CoachCategoryAssignment {
+  category_id: string;
+  category_name: string;
+  group_id: string | null;
+  group_name: string | null;
+  label: string;
+}
+
+// Agrupa las asignaciones del entrenador (una fila por grupo) en el mismo
+// formato de `/categories/`, para reusar el mismo selector de categoría/grupo
+// pero limitado a lo que tiene a cargo.
+const categoriesFromAssignments = (assignments: CoachCategoryAssignment[]): CategoryOption[] => {
+  const byCategory = new Map<string, CategoryOption>();
+  for (const a of assignments) {
+    if (!byCategory.has(a.category_id)) {
+      byCategory.set(a.category_id, { id: a.category_id, name: a.category_name, groups: [] });
+    }
+    if (a.group_id && a.group_name) {
+      byCategory.get(a.category_id)!.groups.push({ id: a.group_id, name: a.group_name });
+    }
+  }
+  return Array.from(byCategory.values());
+};
+
 const mapEvent = (r: ApiTrainingSession): EventItem => {
   const dt = parseISO(r.scheduled_at);
   return {
@@ -80,6 +105,8 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const emptyForm = { type: "training", title: "", date: "", time: "", location: "", categoryId: "", groupId: "" };
 
 export default function CalendarPage() {
+  const { user } = useAuth();
+  const isCoach = user?.role === "coach";
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()));
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,20 +120,27 @@ export default function CalendarPage() {
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [categoriesError, setCategoriesError] = useState(false);
 
-  // Mismo catálogo (con sus grupos) que Configuración del club > Categorías (`/categories/`).
+  // Un entrenador solo puede crear eventos para sus propias categorías/grupos
+  // a cargo (`/coaches/me/categories/`); admin/aux ven el catálogo completo
+  // (`/categories/`), igual que en Configuración del club > Categorías.
   const loadCategories = useCallback(async () => {
     setCategoriesLoading(true);
     setCategoriesError(false);
     try {
-      const { data } = await api.get<CategoryOption[]>("/categories/");
-      setCategories(data);
+      if (isCoach) {
+        const { data } = await api.get<CoachCategoryAssignment[]>("/coaches/me/categories/");
+        setCategories(categoriesFromAssignments(data));
+      } else {
+        const { data } = await api.get<CategoryOption[]>("/categories/");
+        setCategories(data);
+      }
     } catch {
       setCategoriesError(true);
       toast.error("No se pudieron cargar las categorías");
     } finally {
       setCategoriesLoading(false);
     }
-  }, []);
+  }, [isCoach]);
 
   const selectedCategory = useMemo(
     () => categories.find((c) => c.id === form.categoryId) ?? null,
@@ -186,8 +220,11 @@ export default function CalendarPage() {
       toast.success("Evento creado");
       setCreateOpen(false);
       setForm(emptyForm);
-    } catch {
-      toast.error("No se pudo crear el evento");
+    } catch (error) {
+      const message = isAxiosError(error)
+        ? (error.response?.data as { error?: { message?: string } } | undefined)?.error?.message
+        : null;
+      toast.error(message || "No se pudo crear el evento");
     } finally {
       setSaving(false);
     }
@@ -280,7 +317,9 @@ export default function CalendarPage() {
                       </p>
                     ) : !categoriesLoading && categories.length === 0 ? (
                       <p className="text-xs text-muted-foreground mt-1">
-                        No hay categorías creadas. Crea una desde Configuración del club.
+                        {isCoach
+                          ? "No tienes categorías o grupos asignados. Pide al administrador que te los asigne en Usuarios y roles."
+                          : "No hay categorías creadas. Crea una desde Configuración del club."}
                       </p>
                     ) : null}
                   </div>
