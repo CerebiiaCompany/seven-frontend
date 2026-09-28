@@ -9,8 +9,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { isAxiosError } from "axios";
 import api from "@/lib/api";
-import { createBoard } from "./Games";
+import { createBoard, listBoards } from "./Games";
 
 interface EventOption {
   id: string;
@@ -41,17 +42,26 @@ const GameSetup = () => {
   const [events, setEvents] = useState<EventOption[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState(false);
+  const [usedSessionIds, setUsedSessionIds] = useState<Set<string>>(new Set());
   const [sessionId, setSessionId] = useState("");
   const [creating, setCreating] = useState(false);
 
+  // Un evento admite como mucho un juego/sesión activo: se cargan los ya
+  // usados (de este mismo tipo) para deshabilitarlos en el selector.
   const loadEvents = useCallback(async () => {
     setEventsLoading(true);
     setEventsError(false);
     try {
-      const { data } = await api.get<{ results: EventOption[] }>("/training-sessions/", {
-        params: { event_type: isTraining ? "training" : "match", page_size: 100 },
-      });
-      setEvents(data.results);
+      const [eventsRes, boardsRes] = await Promise.all([
+        api.get<{ results: EventOption[] }>("/training-sessions/", {
+          params: { event_type: isTraining ? "training" : "match", page_size: 100 },
+        }),
+        listBoards({ board_type: isTraining ? "training" : "game" }),
+      ]);
+      setEvents(eventsRes.data.results);
+      setUsedSessionIds(
+        new Set(boardsRes.results.map((b) => b.training_session?.id).filter((id): id is string => !!id)),
+      );
     } catch {
       setEventsError(true);
       toast.error(isTraining ? "No se pudieron cargar los entrenamientos" : "No se pudieron cargar los partidos");
@@ -63,10 +73,15 @@ const GameSetup = () => {
   useEffect(() => { loadEvents(); }, [loadEvents]);
 
   const selectedEvent = useMemo(() => events.find((e) => e.id === sessionId) ?? null, [events, sessionId]);
+  const availableEvents = useMemo(() => events.filter((e) => !usedSessionIds.has(e.id)), [events, usedSessionIds]);
 
   const handleCreate = async () => {
     if (!name.trim()) { toast.error(isTraining ? "Ponle un nombre a la sesión" : "Ponle un nombre al juego"); return; }
     if (!sessionId) { toast.error(isTraining ? "Selecciona el entrenamiento" : "Selecciona el partido"); return; }
+    if (usedSessionIds.has(sessionId)) {
+      toast.error(isTraining ? "Ese entrenamiento ya tiene una sesión creada" : "Ese partido ya tiene un juego creado");
+      return;
+    }
 
     if (isTraining) {
       navigate("/gamification/entrenamiento", {
@@ -86,8 +101,11 @@ const GameSetup = () => {
     try {
       const board = await createBoard({ name: name.trim(), training_session_id: sessionId });
       navigate(`/gamification/${board.id}`);
-    } catch {
-      toast.error("No se pudo crear el juego");
+    } catch (error) {
+      const detail = isAxiosError(error)
+        ? (error.response?.data as { error?: { message?: string } } | undefined)?.error?.message
+        : null;
+      toast.error(detail || "No se pudo crear el juego");
     } finally {
       setCreating(false);
     }
@@ -137,7 +155,14 @@ const GameSetup = () => {
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    {events.map((e) => <SelectItem key={e.id} value={e.id}>{formatEventLabel(e)}</SelectItem>)}
+                    {events.map((e) => {
+                      const used = usedSessionIds.has(e.id);
+                      return (
+                        <SelectItem key={e.id} value={e.id} disabled={used}>
+                          {formatEventLabel(e)}{used ? (isTraining ? " · ya tiene sesión" : " · ya tiene juego") : ""}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
                 {eventsError ? (
@@ -150,6 +175,12 @@ const GameSetup = () => {
                     {isTraining
                       ? "No hay entrenamientos creados. Créalos primero desde el Calendario."
                       : "No hay partidos creados. Créalos primero desde el Calendario."}
+                  </p>
+                ) : !eventsLoading && availableEvents.length === 0 ? (
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    {isTraining
+                      ? "Todos los entrenamientos ya tienen una sesión creada."
+                      : "Todos los partidos ya tienen un juego creado."}
                   </p>
                 ) : null}
               </div>

@@ -486,8 +486,11 @@ const GameEditor = () => {
         if (blob) await uploadThumbnail(created.id, blob);
         toast.success("Sesión guardada");
         navigate(`/gamification/${created.id}`, { replace: true });
-      } catch {
-        toast.error("No se pudo guardar la sesión");
+      } catch (error) {
+        const detail = isAxiosError(error)
+          ? (error.response?.data as { error?: { message?: string } } | undefined)?.error?.message
+          : null;
+        toast.error(detail || "No se pudo guardar la sesión");
       } finally {
         setSaving(false);
       }
