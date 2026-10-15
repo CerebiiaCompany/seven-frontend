@@ -104,19 +104,34 @@ const MethodologyExercises = () => {
   const [rating, setRating] = useState<ApiExercise | null>(null);
   const [scoresLoading, setScoresLoading] = useState(false);
   const [scores, setScores] = useState<Record<string, string>>({});
+  const [stats, setStats] = useState<Record<string, { t_score: number; percentage: number }>>({});
+  const [norms, setNorms] = useState<{ mean: number; sd: number; count: number } | null>(null);
   const [saving, setSaving] = useState(false);
 
   const openRating = async (exercise: ApiExercise) => {
     setRating(exercise);
     setScores({});
+    setStats({});
+    setNorms(null);
     setScoresLoading(true);
     try {
-      const { data } = await api.get<Record<string, number>>(`/exercises/${exercise.id}/scores/`, {
+      const { data } = await api.get<{
+        norms: { mean: number; sd: number; count: number } | null;
+        players: Record<string, { score: number; t_score?: number; percentage?: number }>;
+      }>(`/exercises/${exercise.id}/scores/`, {
         params: { category_id: categoryId, group_id: groupId || undefined },
       });
       const prefilled: Record<string, string> = {};
-      Object.entries(data).forEach(([playerId, score]) => { prefilled[playerId] = String(score); });
+      const prefilledStats: Record<string, { t_score: number; percentage: number }> = {};
+      Object.entries(data.players).forEach(([playerId, entry]) => {
+        prefilled[playerId] = String(entry.score);
+        if (entry.t_score !== undefined && entry.percentage !== undefined) {
+          prefilledStats[playerId] = { t_score: entry.t_score, percentage: entry.percentage };
+        }
+      });
       setScores(prefilled);
+      setStats(prefilledStats);
+      setNorms(data.norms);
     } catch {
       toast({ title: "No se pudieron cargar las calificaciones existentes", variant: "destructive" });
     } finally {
@@ -284,7 +299,7 @@ const MethodologyExercises = () => {
           <DialogHeader>
             <DialogTitle>Calificar: {rating?.name}</DialogTitle>
             <DialogDescription>
-              {selectedCategory?.name}{selectedGroup ? ` ${selectedGroup.name}` : ""} — ya tienen nota se muestra precargada.
+              {selectedCategory?.name}{selectedGroup ? ` ${selectedGroup.name}` : ""} — ya tienen nota se muestra precargada con su T-score.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 pt-1">
@@ -294,28 +309,51 @@ const MethodologyExercises = () => {
               <p className="text-sm text-muted-foreground py-4 text-center">No hay deportistas confirmados en esa categoría/grupo.</p>
             ) : (
               <>
-                {roster.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between gap-3 p-2.5 rounded-lg border">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <UserAvatar
-                        photoUrl={p.photo}
-                        name={p.full_name}
-                        className="w-8 h-8 rounded-full text-xs text-primary-foreground flex-shrink-0"
-                        style={{ background: "hsl(var(--primary))" }}
+                {norms ? (
+                  <p className="text-[11px] text-muted-foreground px-0.5">
+                    Promedio de la categoría: {norms.mean} (± {norms.sd}, n={norms.count})
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground px-0.5">
+                    El T-score aparece cuando la categoría tenga al menos 2 calificaciones en este ejercicio.
+                  </p>
+                )}
+                {roster.map((p) => {
+                  const stat = stats[p.id];
+                  return (
+                    <div key={p.id} className="flex items-center justify-between gap-3 p-2.5 rounded-lg border">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <UserAvatar
+                          photoUrl={p.photo}
+                          name={p.full_name}
+                          className="w-8 h-8 rounded-full text-xs text-primary-foreground flex-shrink-0"
+                          style={{ background: "hsl(var(--primary))" }}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm truncate">{p.full_name}</p>
+                          {stat && (
+                            <p className="text-[10px] text-muted-foreground">
+                              T-score {stat.t_score} · {stat.percentage}%
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={10}
+                        className="w-16 text-center flex-shrink-0"
+                        placeholder="1-10"
+                        value={scores[p.id] ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setScores((s) => ({ ...s, [p.id]: value }));
+                          setStats((s) => { const next = { ...s }; delete next[p.id]; return next; });
+                        }}
                       />
-                      <span className="text-sm truncate">{p.full_name}</span>
                     </div>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={10}
-                      className="w-16 text-center flex-shrink-0"
-                      placeholder="1-10"
-                      value={scores[p.id] ?? ""}
-                      onChange={(e) => setScores((s) => ({ ...s, [p.id]: e.target.value }))}
-                    />
-                  </div>
-                ))}
+                  );
+                })}
                 <Button className="w-full gap-2 mt-2" disabled={saving} onClick={saveRatings}>
                   {saving ? "Guardando..." : "Guardar calificaciones"}
                 </Button>
