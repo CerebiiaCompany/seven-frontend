@@ -33,14 +33,16 @@ const methodologies = [
 ];
 
 const exercises = [
-  { id: 1, name: "Rondo 4v2", category: "Táctica", duration: 15, intensity: "Media", players: "6-8", description: "Juego de posesión en espacio reducido" },
+  { id: 1, name: "Rondo 4v2", category: "Competencia (Táctico)", duration: 15, intensity: "Media", players: "6-8", description: "Juego de posesión en espacio reducido" },
   { id: 2, name: "Circuito de Pases", category: "Técnica", duration: 20, intensity: "Baja", players: "8-12", description: "Secuencia de pases con movilidad" },
   { id: 3, name: "Sprint + Recuperación", category: "Físico", duration: 12, intensity: "Alta", players: "Todos", description: "Intervalos de alta intensidad" },
-  { id: 4, name: "Juego Posicional 7v7", category: "Táctica", duration: 25, intensity: "Alta", players: "14-16", description: "Simulación de partido con roles" },
+  { id: 4, name: "Juego Posicional 7v7", category: "Competencia (Táctico)", duration: 25, intensity: "Alta", players: "14-16", description: "Simulación de partido con roles" },
   { id: 5, name: "Control Orientado", category: "Técnica", duration: 15, intensity: "Media", players: "4-6", description: "Ejercicio de primer toque direccional" },
   { id: 6, name: "Fuerza Funcional", category: "Físico", duration: 30, intensity: "Alta", players: "Todos", description: "Trabajo de fuerza con bandas y peso corporal" },
-  { id: 7, name: "Pressing Alto", category: "Táctica", duration: 20, intensity: "Alta", players: "10-14", description: "Presión coordinada en campo rival" },
+  { id: 7, name: "Pressing Alto", category: "Competencia (Táctico)", duration: 20, intensity: "Alta", players: "10-14", description: "Presión coordinada en campo rival" },
   { id: 8, name: "Conducción en Slalom", category: "Técnica", duration: 10, intensity: "Baja", players: "Todos", description: "Dribling entre conos con cambio de ritmo" },
+  { id: 9, name: "Visualización Pre-Partido", category: "Psicológico", duration: 15, intensity: "Baja", players: "Todos", description: "Técnica de concentración y visualización de jugadas" },
+  { id: 10, name: "Manejo de Presión en Penales", category: "Psicológico", duration: 20, intensity: "Media", players: "1-4", description: "Simulación de situaciones de alta presión" },
 ];
 
 const intensityColor = (i: string) =>
@@ -51,6 +53,14 @@ const Coaches = () => {
   const [search, setSearch] = useState("");
   const [showNewMethodology, setShowNewMethodology] = useState(false);
   const [showNewExercise, setShowNewExercise] = useState(false);
+  const [activeTab, setActiveTab] = useState("methodologies");
+  const [exerciseCategoryFilter, setExerciseCategoryFilter] = useState<string | null>(null);
+
+  const openExercisesForMethodology = (category: string) => {
+    setExerciseCategoryFilter(category);
+    setSearch("");
+    setActiveTab("exercises");
+  };
 
   useEffect(() => {
     api
@@ -102,7 +112,7 @@ const Coaches = () => {
         </motion.div>
 
         {/* Tabs */}
-        <Tabs defaultValue="methodologies" className="space-y-5">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <TabsList className="bg-muted/60">
               <TabsTrigger value="methodologies" className="text-xs gap-1.5"><BookOpen className="w-3.5 h-3.5" />Metodologías</TabsTrigger>
@@ -126,6 +136,7 @@ const Coaches = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {methodologies.filter((m) => m.name.toLowerCase().includes(search.toLowerCase())).map((m, i) => (
                 <motion.div key={m.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                  onClick={() => openExercisesForMethodology(m.category)}
                   className="glass-card p-5 hover:shadow-md transition-shadow cursor-pointer group">
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${m.color}20` }}>
@@ -145,13 +156,22 @@ const Coaches = () => {
 
           {/* Exercises */}
           <TabsContent value="exercises">
-            <div className="flex justify-end mb-4">
+            <div className="flex items-center justify-between mb-4 gap-2">
+              {exerciseCategoryFilter ? (
+                <Badge variant="secondary" className="gap-1.5 text-xs font-normal">
+                  Filtrando por: {exerciseCategoryFilter}
+                  <button onClick={() => setExerciseCategoryFilter(null)} className="text-muted-foreground hover:text-foreground">×</button>
+                </Badge>
+              ) : <span />}
               <Button size="sm" className="gap-1.5 text-xs" onClick={() => setShowNewExercise(true)}>
                 <Plus className="w-3.5 h-3.5" />Nuevo Ejercicio
               </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {exercises.filter((e) => e.name.toLowerCase().includes(search.toLowerCase())).map((e, i) => (
+              {exercises
+                .filter((e) => e.name.toLowerCase().includes(search.toLowerCase()))
+                .filter((e) => !exerciseCategoryFilter || e.category === exerciseCategoryFilter)
+                .map((e, i) => (
                 <motion.div key={e.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.03 }}
                   className="glass-card p-4 hover:shadow-md transition-shadow cursor-pointer">
                   <div className="flex items-center justify-between mb-2">
