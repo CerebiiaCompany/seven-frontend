@@ -25,5 +25,14 @@ export const INTENSITIES = [
 export const categoryLabel = (value: string) => EXERCISE_CATEGORIES.find((c) => c.value === value)?.label ?? value;
 export const intensityLabel = (value: string) => INTENSITIES.find((i) => i.value === value)?.label ?? value;
 
+const CATEGORY_COLORS: Record<string, string> = {
+  tecnica: "hsl(var(--primary))",
+  fisico: "hsl(var(--kpi-amber))",
+  psicologico: "hsl(var(--kpi-green))",
+  competencia_tactico: "hsl(var(--kpi-blue))",
+};
+
+export const categoryColor = (value: string) => CATEGORY_COLORS[value] ?? "hsl(var(--primary))";
+
 export const intensityColor = (i: string) =>
   i === "alta" ? "text-destructive" : i === "media" ? "text-[hsl(var(--kpi-amber))]" : "text-[hsl(var(--primary))]";

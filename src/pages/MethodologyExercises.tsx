@@ -13,7 +13,7 @@ import { ArrowLeft, ClipboardCheck, Clock, Pencil, Users } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ApiExercise, categoryLabel, intensityLabel, intensityColor } from "@/lib/exercises";
+import { ApiExercise, categoryColor, categoryLabel, intensityLabel, intensityColor } from "@/lib/exercises";
 
 interface NamedRef {
   id: string;
@@ -159,56 +159,66 @@ const MethodologyExercises = () => {
   };
 
   if (!confirmed) {
+    const color = categoryColor(category ?? "");
     return (
       <DashboardLayout>
-        <div className="p-4 sm:p-6 lg:p-8 max-w-md mx-auto">
-          <div className="flex items-center gap-3 mb-6">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/coaches")}>
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-display font-bold text-foreground">{categoryLabel(category ?? "")}</h1>
-              <p className="text-sm text-muted-foreground mt-1">Selecciona la categoría y el grupo a trabajar</p>
-            </div>
-          </div>
+        <div className="p-4 sm:p-6 lg:p-8 max-w-lg mx-auto w-full">
+          <Button variant="ghost" size="sm" className="gap-1.5 text-xs mb-6 -ml-2" onClick={() => navigate("/coaches")}>
+            <ArrowLeft className="w-3.5 h-3.5" />Volver a Entrenadores
+          </Button>
 
-          <div className="glass-card p-5 space-y-4">
-            <div>
-              <Label>Categoría</Label>
-              <Select
-                value={categoryId}
-                onValueChange={(v) => { setCategoryId(v); setGroupId(""); }}
-                disabled={categoriesLoading || categories.length === 0}
+          <div className="glass-card p-6 sm:p-8">
+            <div className="flex flex-col items-center text-center mb-6">
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+                style={{ background: `${color}1a` }}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder={categoriesLoading ? "Cargando categorías..." : "Selecciona una categoría"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+                <ClipboardCheck className="w-7 h-7" style={{ color }} />
+              </div>
+              <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">{categoryLabel(category ?? "")}</h1>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                Selecciona la categoría y el grupo para ver sus ejercicios y calificarlos
+              </p>
             </div>
 
-            <div>
-              <Label>Grupo</Label>
-              {!selectedCategory ? (
-                <Select disabled value="">
-                  <SelectTrigger><SelectValue placeholder="Selecciona primero una categoría" /></SelectTrigger>
-                  <SelectContent />
-                </Select>
-              ) : selectedCategory.groups.length === 0 ? (
-                <p className="text-xs text-muted-foreground mt-1.5">Esta categoría no tiene grupos creados.</p>
-              ) : (
-                <Select value={groupId} onValueChange={setGroupId}>
-                  <SelectTrigger><SelectValue placeholder="Selecciona un grupo" /></SelectTrigger>
+            <div className="space-y-4">
+              <div>
+                <Label>Categoría</Label>
+                <Select
+                  value={categoryId}
+                  onValueChange={(v) => { setCategoryId(v); setGroupId(""); }}
+                  disabled={categoriesLoading || categories.length === 0}
+                >
+                  <SelectTrigger className="mt-1.5 w-full">
+                    <SelectValue placeholder={categoriesLoading ? "Cargando categorías..." : "Selecciona una categoría"} />
+                  </SelectTrigger>
                   <SelectContent>
-                    {selectedCategory.groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                    {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              )}
-            </div>
+              </div>
 
-            <Button className="w-full" onClick={confirmSelection}>Continuar</Button>
+              <div>
+                <Label>Grupo</Label>
+                {!selectedCategory ? (
+                  <Select disabled value="">
+                    <SelectTrigger className="mt-1.5 w-full"><SelectValue placeholder="Selecciona primero una categoría" /></SelectTrigger>
+                    <SelectContent />
+                  </Select>
+                ) : selectedCategory.groups.length === 0 ? (
+                  <p className="text-xs text-muted-foreground mt-1.5">Esta categoría no tiene grupos creados.</p>
+                ) : (
+                  <Select value={groupId} onValueChange={setGroupId}>
+                    <SelectTrigger className="mt-1.5 w-full"><SelectValue placeholder="Selecciona un grupo" /></SelectTrigger>
+                    <SelectContent>
+                      {selectedCategory.groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              <Button className="w-full gap-2" onClick={confirmSelection}>Continuar</Button>
+            </div>
           </div>
         </div>
       </DashboardLayout>
@@ -218,21 +228,21 @@ const MethodologyExercises = () => {
   return (
     <DashboardLayout>
       <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px]">
-        <div className="flex items-center gap-3 mb-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/coaches")}>
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-display font-bold text-foreground">{categoryLabel(category ?? "")}</h1>
+        <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={() => navigate("/coaches")}>
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground truncate">{categoryLabel(category ?? "")}</h1>
           </div>
-        </div>
-        <div className="flex items-center gap-2 mb-6 ml-11">
-          <Badge variant="secondary" className="text-xs font-normal">
-            {selectedCategory?.name}{selectedGroup ? ` ${selectedGroup.name}` : ""}
-          </Badge>
-          <button onClick={changeSelection} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-            <Pencil className="w-3 h-3" />Cambiar
-          </button>
+          <div className="flex items-center gap-2 sm:flex-shrink-0">
+            <Badge variant="secondary" className="text-xs font-normal">
+              {selectedCategory?.name}{selectedGroup ? ` ${selectedGroup.name}` : ""}
+            </Badge>
+            <button onClick={changeSelection} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+              <Pencil className="w-3 h-3" />Cambiar
+            </button>
+          </div>
         </div>
 
         {exercisesLoading ? (
@@ -247,10 +257,10 @@ const MethodologyExercises = () => {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.03 }}
-                className="glass-card p-4 flex items-center justify-between gap-3"
+                className="glass-card p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
               >
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h4 className="font-semibold text-sm text-foreground truncate">{e.name}</h4>
                     <span className={`text-[10px] font-semibold flex-shrink-0 ${intensityColor(e.intensity)}`}>{intensityLabel(e.intensity)}</span>
                   </div>
@@ -260,7 +270,7 @@ const MethodologyExercises = () => {
                     <span className="flex items-center gap-1"><Users className="w-3 h-3" />{e.players}</span>
                   </div>
                 </div>
-                <Button size="sm" variant="outline" className="gap-1.5 text-xs flex-shrink-0" onClick={() => openRating(e)}>
+                <Button size="sm" variant="outline" className="gap-1.5 text-xs flex-shrink-0 w-full sm:w-auto" onClick={() => openRating(e)}>
                   <ClipboardCheck className="w-3.5 h-3.5" />Calificar
                 </Button>
               </motion.div>
