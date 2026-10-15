@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { isAxiosError } from "axios";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ import {
   GraduationCap, Flame, Shield
 } from "lucide-react";
 import api from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 import { UserAvatar } from "@/components/UserAvatar";
 
 interface ApiCoach {
@@ -23,36 +25,62 @@ interface ApiCoach {
   categories: string[];
 }
 
-// --- Mock Data (metodologías, ciclos y ejercicios: aún no hay módulo real en el backend) ---
+interface ApiExercise {
+  id: string;
+  name: string;
+  category: string;
+  intensity: string;
+  duration_minutes: number;
+  players: string;
+  description: string;
+}
 
-const methodologies = [
-  { id: 1, name: "Técnica", phases: 6, exercises: 36, category: "Técnica", color: "hsl(var(--primary))" },
-  { id: 2, name: "Físico", phases: 3, exercises: 18, category: "Físico", color: "hsl(var(--kpi-amber))" },
-  { id: 3, name: "Psicológico", phases: 3, exercises: 15, category: "Psicológico", color: "hsl(var(--kpi-green))" },
-  { id: 4, name: "Competencia (Táctico)", phases: 4, exercises: 24, category: "Competencia (Táctico)", color: "hsl(var(--kpi-blue))" },
+// Las 4 áreas de metodología del club — deben coincidir con `Exercise.Category` en el backend.
+const EXERCISE_CATEGORIES = [
+  { value: "tecnica", label: "Técnica" },
+  { value: "fisico", label: "Físico" },
+  { value: "psicologico", label: "Psicológico" },
+  { value: "competencia_tactico", label: "Competencia (Táctico)" },
 ];
 
-const exercises = [
-  { id: 1, name: "Rondo 4v2", category: "Competencia (Táctico)", duration: 15, intensity: "Media", players: "6-8", description: "Juego de posesión en espacio reducido" },
-  { id: 2, name: "Circuito de Pases", category: "Técnica", duration: 20, intensity: "Baja", players: "8-12", description: "Secuencia de pases con movilidad" },
-  { id: 3, name: "Sprint + Recuperación", category: "Físico", duration: 12, intensity: "Alta", players: "Todos", description: "Intervalos de alta intensidad" },
-  { id: 4, name: "Juego Posicional 7v7", category: "Competencia (Táctico)", duration: 25, intensity: "Alta", players: "14-16", description: "Simulación de partido con roles" },
-  { id: 5, name: "Control Orientado", category: "Técnica", duration: 15, intensity: "Media", players: "4-6", description: "Ejercicio de primer toque direccional" },
-  { id: 6, name: "Fuerza Funcional", category: "Físico", duration: 30, intensity: "Alta", players: "Todos", description: "Trabajo de fuerza con bandas y peso corporal" },
-  { id: 7, name: "Pressing Alto", category: "Competencia (Táctico)", duration: 20, intensity: "Alta", players: "10-14", description: "Presión coordinada en campo rival" },
-  { id: 8, name: "Conducción en Slalom", category: "Técnica", duration: 10, intensity: "Baja", players: "Todos", description: "Dribling entre conos con cambio de ritmo" },
-  { id: 9, name: "Visualización Pre-Partido", category: "Psicológico", duration: 15, intensity: "Baja", players: "Todos", description: "Técnica de concentración y visualización de jugadas" },
-  { id: 10, name: "Manejo de Presión en Penales", category: "Psicológico", duration: 20, intensity: "Media", players: "1-4", description: "Simulación de situaciones de alta presión" },
+const INTENSITIES = [
+  { value: "baja", label: "Baja" },
+  { value: "media", label: "Media" },
+  { value: "alta", label: "Alta" },
+];
+
+const categoryLabel = (value: string) => EXERCISE_CATEGORIES.find((c) => c.value === value)?.label ?? value;
+const intensityLabel = (value: string) => INTENSITIES.find((i) => i.value === value)?.label ?? value;
+
+// --- Mock Data (metodologías: aún no hay módulo real en el backend; los ejercicios sí se persisten en /api/v1/exercises/) ---
+
+const methodologies = [
+  { id: 1, name: "Técnica", phases: 6, category: "tecnica", color: "hsl(var(--primary))" },
+  { id: 2, name: "Físico", phases: 3, category: "fisico", color: "hsl(var(--kpi-amber))" },
+  { id: 3, name: "Psicológico", phases: 3, category: "psicologico", color: "hsl(var(--kpi-green))" },
+  { id: 4, name: "Competencia (Táctico)", phases: 4, category: "competencia_tactico", color: "hsl(var(--kpi-blue))" },
 ];
 
 const intensityColor = (i: string) =>
-  i === "Alta" ? "text-destructive" : i === "Media" ? "text-[hsl(var(--kpi-amber))]" : "text-[hsl(var(--primary))]";
+  i === "alta" ? "text-destructive" : i === "media" ? "text-[hsl(var(--kpi-amber))]" : "text-[hsl(var(--primary))]";
+
+const emptyExerciseForm = {
+  name: "",
+  category: EXERCISE_CATEGORIES[0].value,
+  intensity: INTENSITIES[0].value,
+  duration_minutes: "",
+  players: "",
+  description: "",
+};
 
 const Coaches = () => {
   const [coaches, setCoaches] = useState<ApiCoach[]>([]);
+  const [exercises, setExercises] = useState<ApiExercise[]>([]);
   const [search, setSearch] = useState("");
   const [showNewMethodology, setShowNewMethodology] = useState(false);
   const [showNewExercise, setShowNewExercise] = useState(false);
+  const [exerciseForm, setExerciseForm] = useState(emptyExerciseForm);
+  const [savingExercise, setSavingExercise] = useState(false);
   const [activeTab, setActiveTab] = useState("methodologies");
   const [exerciseCategoryFilter, setExerciseCategoryFilter] = useState<string | null>(null);
 
@@ -62,12 +90,49 @@ const Coaches = () => {
     setActiveTab("exercises");
   };
 
+  const loadExercises = useCallback(() => {
+    return api
+      .get<ApiExercise[]>("/exercises/")
+      .then(({ data }) => setExercises(data))
+      .catch(() => { /* deja la lista vacía si falla */ });
+  }, []);
+
   useEffect(() => {
     api
       .get<ApiCoach[]>("/coaches/")
       .then(({ data }) => setCoaches(data))
       .catch(() => { /* deja la lista vacía si falla */ });
-  }, []);
+    loadExercises();
+  }, [loadExercises]);
+
+  const createExercise = async () => {
+    if (!exerciseForm.name.trim() || !exerciseForm.players.trim() || !exerciseForm.duration_minutes) {
+      toast({ title: "Completa nombre, duración y jugadores", variant: "destructive" });
+      return;
+    }
+    setSavingExercise(true);
+    try {
+      await api.post("/exercises/", {
+        name: exerciseForm.name.trim(),
+        category: exerciseForm.category,
+        intensity: exerciseForm.intensity,
+        duration_minutes: Number(exerciseForm.duration_minutes),
+        players: exerciseForm.players.trim(),
+        description: exerciseForm.description.trim(),
+      });
+      await loadExercises();
+      setShowNewExercise(false);
+      setExerciseForm(emptyExerciseForm);
+      toast({ title: "Ejercicio creado" });
+    } catch (error) {
+      const detail = isAxiosError(error)
+        ? Object.values(error.response?.data?.error?.details ?? {})[0]?.[0]
+        : null;
+      toast({ title: typeof detail === "string" ? detail : "No se pudo crear el ejercicio", variant: "destructive" });
+    } finally {
+      setSavingExercise(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -142,12 +207,12 @@ const Coaches = () => {
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${m.color}20` }}>
                       <Target className="w-4 h-4" style={{ color: m.color }} />
                     </div>
-                    <Badge variant="secondary" className="text-[10px]">{m.category}</Badge>
+                    <Badge variant="secondary" className="text-[10px]">{categoryLabel(m.category)}</Badge>
                   </div>
                   <h3 className="font-semibold text-sm text-foreground mb-3 group-hover:text-primary transition-colors">{m.name}</h3>
                   <div className="flex gap-4 text-[11px] text-muted-foreground">
                     <span className="flex items-center gap-1"><Layers className="w-3 h-3" />{m.phases} fases</span>
-                    <span className="flex items-center gap-1"><Dumbbell className="w-3 h-3" />{m.exercises} ejercicios</span>
+                    <span className="flex items-center gap-1"><Dumbbell className="w-3 h-3" />{exercises.filter((e) => e.category === m.category).length} ejercicios</span>
                   </div>
                 </motion.div>
               ))}
@@ -159,7 +224,7 @@ const Coaches = () => {
             <div className="flex items-center justify-between mb-4 gap-2">
               {exerciseCategoryFilter ? (
                 <Badge variant="secondary" className="gap-1.5 text-xs font-normal">
-                  Filtrando por: {exerciseCategoryFilter}
+                  Filtrando por: {categoryLabel(exerciseCategoryFilter)}
                   <button onClick={() => setExerciseCategoryFilter(null)} className="text-muted-foreground hover:text-foreground">×</button>
                 </Badge>
               ) : <span />}
@@ -168,6 +233,9 @@ const Coaches = () => {
               </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              {exercises.length === 0 && (
+                <p className="text-sm text-muted-foreground md:col-span-4">Todavía no hay ejercicios registrados.</p>
+              )}
               {exercises
                 .filter((e) => e.name.toLowerCase().includes(search.toLowerCase()))
                 .filter((e) => !exerciseCategoryFilter || e.category === exerciseCategoryFilter)
@@ -175,13 +243,13 @@ const Coaches = () => {
                 <motion.div key={e.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.03 }}
                   className="glass-card p-4 hover:shadow-md transition-shadow cursor-pointer">
                   <div className="flex items-center justify-between mb-2">
-                    <Badge variant="secondary" className="text-[10px]">{e.category}</Badge>
-                    <span className={`text-[10px] font-semibold ${intensityColor(e.intensity)}`}>{e.intensity}</span>
+                    <Badge variant="secondary" className="text-[10px]">{categoryLabel(e.category)}</Badge>
+                    <span className={`text-[10px] font-semibold ${intensityColor(e.intensity)}`}>{intensityLabel(e.intensity)}</span>
                   </div>
                   <h4 className="font-semibold text-sm text-foreground mb-1">{e.name}</h4>
                   <p className="text-[11px] text-muted-foreground mb-3 line-clamp-2">{e.description}</p>
                   <div className="flex gap-3 text-[10px] text-muted-foreground">
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{e.duration} min</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{e.duration_minutes} min</span>
                     <span className="flex items-center gap-1"><Users className="w-3 h-3" />{e.players}</span>
                   </div>
                 </motion.div>
@@ -216,32 +284,74 @@ const Coaches = () => {
       </Dialog>
 
       {/* New Exercise Dialog */}
-      <Dialog open={showNewExercise} onOpenChange={setShowNewExercise}>
+      <Dialog open={showNewExercise} onOpenChange={(open) => { setShowNewExercise(open); if (!open) setExerciseForm(emptyExerciseForm); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Dumbbell className="w-5 h-5 text-primary" />Nuevo Ejercicio</DialogTitle>
             <DialogDescription>Añade un ejercicio a tu biblioteca</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <div><label className="text-xs font-medium text-foreground mb-1 block">Nombre</label><Input placeholder="Ej: Rondo 5v3 con transición" /></div>
+            <div>
+              <label className="text-xs font-medium text-foreground mb-1 block">Nombre</label>
+              <Input
+                placeholder="Ej: Rondo 5v3 con transición"
+                value={exerciseForm.name}
+                onChange={(e) => setExerciseForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-medium text-foreground mb-1 block">Categoría</label>
-                <select className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
-                  <option>Técnica</option><option>Físico</option><option>Psicológico</option><option>Competencia (Táctico)</option>
+              <div>
+                <label className="text-xs font-medium text-foreground mb-1 block">Categoría</label>
+                <select
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+                  value={exerciseForm.category}
+                  onChange={(e) => setExerciseForm((f) => ({ ...f, category: e.target.value }))}
+                >
+                  {EXERCISE_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
-              <div><label className="text-xs font-medium text-foreground mb-1 block">Intensidad</label>
-                <select className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
-                  <option>Baja</option><option>Media</option><option>Alta</option>
+              <div>
+                <label className="text-xs font-medium text-foreground mb-1 block">Intensidad</label>
+                <select
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+                  value={exerciseForm.intensity}
+                  onChange={(e) => setExerciseForm((f) => ({ ...f, intensity: e.target.value }))}
+                >
+                  {INTENSITIES.map((i) => <option key={i.value} value={i.value}>{i.label}</option>)}
                 </select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs font-medium text-foreground mb-1 block">Duración (min)</label><Input type="number" placeholder="15" /></div>
-              <div><label className="text-xs font-medium text-foreground mb-1 block">Jugadores</label><Input placeholder="6-8" /></div>
+              <div>
+                <label className="text-xs font-medium text-foreground mb-1 block">Duración (min)</label>
+                <Input
+                  type="number"
+                  placeholder="15"
+                  value={exerciseForm.duration_minutes}
+                  onChange={(e) => setExerciseForm((f) => ({ ...f, duration_minutes: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground mb-1 block">Jugadores</label>
+                <Input
+                  placeholder="6-8"
+                  value={exerciseForm.players}
+                  onChange={(e) => setExerciseForm((f) => ({ ...f, players: e.target.value }))}
+                />
+              </div>
             </div>
-            <div><label className="text-xs font-medium text-foreground mb-1 block">Descripción</label><Textarea placeholder="Describe el ejercicio..." rows={3} /></div>
-            <Button className="w-full gap-2" onClick={() => setShowNewExercise(false)}><Plus className="w-4 h-4" />Crear Ejercicio</Button>
+            <div>
+              <label className="text-xs font-medium text-foreground mb-1 block">Descripción</label>
+              <Textarea
+                placeholder="Describe el ejercicio..."
+                rows={3}
+                value={exerciseForm.description}
+                onChange={(e) => setExerciseForm((f) => ({ ...f, description: e.target.value }))}
+              />
+            </div>
+            <Button className="w-full gap-2" disabled={savingExercise} onClick={createExercise}>
+              <Plus className="w-4 h-4" />{savingExercise ? "Creando..." : "Crear Ejercicio"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
