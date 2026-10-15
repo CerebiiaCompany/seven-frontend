@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  UserCog, Plus, Search, BookOpen, RefreshCcw, Dumbbell,
-  Clock, Users, ChevronRight, Target, Calendar, Layers,
+  UserCog, Plus, Search, BookOpen, Dumbbell,
+  Clock, Users, ChevronRight, Target, Layers,
   GraduationCap, Flame, Shield
 } from "lucide-react";
 import api from "@/lib/api";
@@ -32,109 +32,6 @@ const methodologies = [
   { id: 4, name: "Competencia (Táctico)", phases: 4, exercises: 24, category: "Competencia (Táctico)", color: "hsl(var(--kpi-blue))" },
 ];
 
-interface Cycle {
-  id: number;
-  name: string;
-  methodology: string;
-  startDate: string;
-  endDate: string;
-  status: string;
-  progress: number;
-  weeks: number;
-  coach: string;
-  category: string;
-  objective: string;
-  tasks: { name: string; owner: string; due: string; done: boolean }[];
-  exercises: { name: string; focus: string; duration: number }[];
-  matches: { rival: string; date: string; result: string; type: string }[];
-  goals: { name: string; target: string; progress: number }[];
-}
-
-const cycles: Cycle[] = [
-  {
-    id: 1, name: "Pretemporada 2025", methodology: "Periodización Táctica", startDate: "Ene 2025", endDate: "Feb 2025",
-    status: "active", progress: 65, weeks: 8, coach: "Carlos Mendoza", category: "Sub-15",
-    objective: "Construir base física y asentar el modelo de juego para el inicio de liga.",
-    tasks: [
-      { name: "Test físicos iniciales", owner: "Laura Gutiérrez", due: "10 Ene", done: true },
-      { name: "Definir modelo de juego", owner: "Carlos Mendoza", due: "15 Ene", done: true },
-      { name: "Evaluación técnica individual", owner: "Carlos Mendoza", due: "05 Feb", done: false },
-      { name: "Informe de cierre de ciclo", owner: "Carlos Mendoza", due: "28 Feb", done: false },
-    ],
-    exercises: [
-      { name: "Rondo 4v2", focus: "Posesión", duration: 15 },
-      { name: "Sprint + Recuperación", focus: "Físico", duration: 12 },
-      { name: "Pressing Alto", focus: "Táctica", duration: 20 },
-      { name: "Circuito de Pases", focus: "Técnica", duration: 20 },
-    ],
-    matches: [
-      { rival: "Halcones FC", date: "20 Ene", result: "2-1", type: "Amistoso" },
-      { rival: "Atlético Norte", date: "03 Feb", result: "1-1", type: "Amistoso" },
-      { rival: "Academia Sur", date: "17 Feb", result: "Pendiente", type: "Amistoso" },
-    ],
-    goals: [
-      { name: "Asistencia a entrenamientos", target: "≥ 90%", progress: 88 },
-      { name: "Mejorar resistencia (Yo-Yo test)", target: "+10%", progress: 70 },
-      { name: "Reducir pérdidas en salida", target: "-25%", progress: 45 },
-    ],
-  },
-  {
-    id: 2, name: "Fase Competitiva I", methodology: "Modelo de Juego Posicional", startDate: "Mar 2025", endDate: "Jun 2025",
-    status: "active", progress: 30, weeks: 16, coach: "Roberto Sánchez", category: "Sub-17",
-    objective: "Competir en liga manteniendo la identidad de juego posicional.",
-    tasks: [
-      { name: "Análisis de rivales", owner: "Roberto Sánchez", due: "Semanal", done: true },
-      { name: "Rotación de convocatorias", owner: "Roberto Sánchez", due: "Mensual", done: false },
-      { name: "Seguimiento de cargas", owner: "Laura Gutiérrez", due: "Semanal", done: false },
-    ],
-    exercises: [
-      { name: "Juego Posicional 7v7", focus: "Táctica", duration: 25 },
-      { name: "Control Orientado", focus: "Técnica", duration: 15 },
-      { name: "Finalización en zona 3", focus: "Ataque", duration: 20 },
-    ],
-    matches: [
-      { rival: "Deportivo Andes", date: "08 Mar", result: "3-0", type: "Liga" },
-      { rival: "Club Real", date: "15 Mar", result: "0-2", type: "Liga" },
-      { rival: "Unión FC", date: "22 Mar", result: "2-2", type: "Liga" },
-    ],
-    goals: [
-      { name: "Posesión promedio", target: "≥ 55%", progress: 62 },
-      { name: "Puntos en liga", target: "30 pts", progress: 33 },
-      { name: "Minutos a canteranos", target: "1200 min", progress: 40 },
-    ],
-  },
-  {
-    id: 3, name: "Microciclo Técnico Abr", methodology: "Desarrollo Técnico Progresivo", startDate: "Abr 2025", endDate: "Abr 2025",
-    status: "planned", progress: 0, weeks: 4, coach: "Carlos Mendoza", category: "Sub-13",
-    objective: "Refinar el primer toque y la conducción bajo presión.",
-    tasks: [
-      { name: "Diseñar sesiones semanales", owner: "Carlos Mendoza", due: "01 Abr", done: false },
-      { name: "Grabar video de referencia", owner: "Staff", due: "05 Abr", done: false },
-    ],
-    exercises: [
-      { name: "Conducción en Slalom", focus: "Técnica", duration: 10 },
-      { name: "Control Orientado", focus: "Técnica", duration: 15 },
-    ],
-    matches: [{ rival: "Escuela Este", date: "26 Abr", result: "Pendiente", type: "Amistoso" }],
-    goals: [{ name: "Precisión de pase", target: "≥ 80%", progress: 0 }],
-  },
-  {
-    id: 4, name: "Camp de Verano 2024", methodology: "Preparación Física Integrada", startDate: "Jul 2024", endDate: "Ago 2024",
-    status: "completed", progress: 100, weeks: 6, coach: "Laura Gutiérrez", category: "Todas",
-    objective: "Mantenimiento físico y socialización entre categorías.",
-    tasks: [
-      { name: "Logística del campamento", owner: "Administración", due: "01 Jul", done: true },
-      { name: "Informe final a familias", owner: "Laura Gutiérrez", due: "30 Ago", done: true },
-    ],
-    exercises: [
-      { name: "Fuerza Funcional", focus: "Físico", duration: 30 },
-      { name: "Circuitos de Velocidad", focus: "Físico", duration: 20 },
-    ],
-    matches: [{ rival: "Interno (mixto)", date: "20 Ago", result: "4-3", type: "Interno" }],
-    goals: [{ name: "Participación", target: "60 deportistas", progress: 100 }],
-  },
-];
-
 const exercises = [
   { id: 1, name: "Rondo 4v2", category: "Táctica", duration: 15, intensity: "Media", players: "6-8", description: "Juego de posesión en espacio reducido" },
   { id: 2, name: "Circuito de Pases", category: "Técnica", duration: 20, intensity: "Baja", players: "8-12", description: "Secuencia de pases con movilidad" },
@@ -149,18 +46,11 @@ const exercises = [
 const intensityColor = (i: string) =>
   i === "Alta" ? "text-destructive" : i === "Media" ? "text-[hsl(var(--kpi-amber))]" : "text-[hsl(var(--primary))]";
 
-const statusBadge = (s: string) => {
-  if (s === "active") return <Badge className="bg-primary/15 text-primary border-0 text-[10px]">Activo</Badge>;
-  if (s === "completed") return <Badge className="bg-muted text-muted-foreground border-0 text-[10px]">Completado</Badge>;
-  return <Badge className="bg-[hsl(var(--kpi-blue))]/15 text-[hsl(var(--kpi-blue))] border-0 text-[10px]">Planificado</Badge>;
-};
-
 const Coaches = () => {
   const [coaches, setCoaches] = useState<ApiCoach[]>([]);
   const [search, setSearch] = useState("");
   const [showNewMethodology, setShowNewMethodology] = useState(false);
   const [showNewExercise, setShowNewExercise] = useState(false);
-  const [selectedCycle, setSelectedCycle] = useState<Cycle | null>(null);
 
   useEffect(() => {
     api
@@ -176,7 +66,7 @@ const Coaches = () => {
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground">Entrenadores</h1>
-            <p className="text-sm text-muted-foreground mt-1">Metodologías, ciclos formativos y ejercicios</p>
+            <p className="text-sm text-muted-foreground mt-1">Metodologías y ejercicios</p>
           </div>
         </motion.div>
 
@@ -216,7 +106,6 @@ const Coaches = () => {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <TabsList className="bg-muted/60">
               <TabsTrigger value="methodologies" className="text-xs gap-1.5"><BookOpen className="w-3.5 h-3.5" />Metodologías</TabsTrigger>
-              <TabsTrigger value="cycles" className="text-xs gap-1.5"><RefreshCcw className="w-3.5 h-3.5" />Ciclos Formativos</TabsTrigger>
               <TabsTrigger value="exercises" className="text-xs gap-1.5"><Dumbbell className="w-3.5 h-3.5" />Ejercicios</TabsTrigger>
             </TabsList>
             <div className="flex gap-2">
@@ -254,39 +143,6 @@ const Coaches = () => {
             </div>
           </TabsContent>
 
-          {/* Cycles */}
-          <TabsContent value="cycles">
-            <div className="space-y-3">
-              {cycles.filter((c) => c.name.toLowerCase().includes(search.toLowerCase())).map((c, i) => (
-                <motion.div key={c.id} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
-                  onClick={() => setSelectedCycle(c)}
-                  className="glass-card p-5 flex flex-col sm:flex-row sm:items-center gap-4 cursor-pointer hover:border-primary/40 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-sm text-foreground">{c.name}</h3>
-                      {statusBadge(c.status)}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{c.methodology}</p>
-                    <div className="flex gap-4 mt-2 text-[11px] text-muted-foreground">
-                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{c.startDate} – {c.endDate}</span>
-                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{c.weeks} semanas</span>
-                    </div>
-                  </div>
-                  <div className="w-full sm:w-40 flex-shrink-0">
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
-                      <span>Progreso</span>
-                      <span className="font-semibold text-foreground">{c.progress}%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <motion.div initial={{ width: 0 }} animate={{ width: `${c.progress}%` }} transition={{ duration: 0.8, delay: i * 0.1 }}
-                        className="h-full rounded-full" style={{ background: "hsl(var(--primary))" }} />
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </TabsContent>
-
           {/* Exercises */}
           <TabsContent value="exercises">
             <div className="flex justify-end mb-4">
@@ -314,102 +170,6 @@ const Coaches = () => {
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* Cycle Detail Dialog */}
-      <Dialog open={!!selectedCycle} onOpenChange={(o) => !o && setSelectedCycle(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-          {selectedCycle && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-primary" />{selectedCycle.name}
-                </DialogTitle>
-                <DialogDescription>{selectedCycle.methodology} · {selectedCycle.category} · {selectedCycle.coach}</DialogDescription>
-              </DialogHeader>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                {[
-                  { label: "Duración", value: `${selectedCycle.weeks} sem` },
-                  { label: "Inicio", value: selectedCycle.startDate },
-                  { label: "Fin", value: selectedCycle.endDate },
-                  { label: "Progreso", value: `${selectedCycle.progress}%` },
-                ].map((s) => (
-                  <div key={s.label} className="p-3 rounded-lg border">
-                    <p className="text-[10px] uppercase text-muted-foreground">{s.label}</p>
-                    <p className="text-sm font-semibold mt-1">{s.value}</p>
-                  </div>
-                ))}
-              </div>
-
-              <p className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/40">{selectedCycle.objective}</p>
-
-              <Tabs defaultValue="tasks" className="space-y-3">
-                <TabsList>
-                  <TabsTrigger value="tasks">Tareas</TabsTrigger>
-                  <TabsTrigger value="exercises">Ejercicios</TabsTrigger>
-                  <TabsTrigger value="matches">Partidos</TabsTrigger>
-                  <TabsTrigger value="goals">Metas</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="tasks" className="space-y-2">
-                  {selectedCycle.tasks.map((t) => (
-                    <div key={t.name} className="flex items-center justify-between gap-3 p-3 rounded-lg border">
-                      <div className="min-w-0">
-                        <p className={`text-sm font-medium truncate ${t.done ? "line-through text-muted-foreground" : ""}`}>{t.name}</p>
-                        <p className="text-xs text-muted-foreground">{t.owner} · {t.due}</p>
-                      </div>
-                      <Badge variant={t.done ? "outline" : "secondary"} className="flex-shrink-0">{t.done ? "Hecha" : "Pendiente"}</Badge>
-                    </div>
-                  ))}
-                </TabsContent>
-
-                <TabsContent value="exercises" className="space-y-2">
-                  {selectedCycle.exercises.map((e) => (
-                    <div key={e.name} className="flex items-center justify-between gap-3 p-3 rounded-lg border">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <Dumbbell className="w-4 h-4 text-primary" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{e.name}</p>
-                          <p className="text-xs text-muted-foreground">{e.focus}</p>
-                        </div>
-                      </div>
-                      <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0"><Clock className="w-3 h-3" />{e.duration} min</span>
-                    </div>
-                  ))}
-                </TabsContent>
-
-                <TabsContent value="matches" className="space-y-2">
-                  {selectedCycle.matches.map((m) => (
-                    <div key={m.rival + m.date} className="flex items-center justify-between gap-3 p-3 rounded-lg border">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">vs. {m.rival}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />{m.date} · {m.type}</p>
-                      </div>
-                      <Badge variant="outline" className="flex-shrink-0">{m.result}</Badge>
-                    </div>
-                  ))}
-                </TabsContent>
-
-                <TabsContent value="goals" className="space-y-3">
-                  {selectedCycle.goals.map((g) => (
-                    <div key={g.name} className="p-3 rounded-lg border">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium flex items-center gap-2"><Target className="w-3.5 h-3.5 text-primary" />{g.name}</span>
-                        <span className="text-xs text-muted-foreground">{g.target}</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-muted overflow-hidden mt-2">
-                        <div className="h-full rounded-full" style={{ width: `${g.progress}%`, background: "hsl(var(--primary))" }} />
-                      </div>
-                    </div>
-                  ))}
-                </TabsContent>
-              </Tabs>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* New Methodology Dialog */}
       <Dialog open={showNewMethodology} onOpenChange={setShowNewMethodology}>
