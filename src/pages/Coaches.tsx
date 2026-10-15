@@ -26,11 +26,10 @@ interface ApiCoach {
 // --- Mock Data (metodologías, ciclos y ejercicios: aún no hay módulo real en el backend) ---
 
 const methodologies = [
-  { id: 1, name: "Periodización Táctica", coach: "Carlos Mendoza", phases: 4, exercises: 24, category: "Táctica", color: "hsl(var(--kpi-blue))" },
-  { id: 2, name: "Desarrollo Técnico Progresivo", coach: "Carlos Mendoza", phases: 6, exercises: 36, category: "Técnica", color: "hsl(var(--primary))" },
-  { id: 3, name: "Preparación Física Integrada", coach: "Laura Gutiérrez", phases: 3, exercises: 18, category: "Físico", color: "hsl(var(--kpi-amber))" },
-  { id: 4, name: "Modelo de Juego Posicional", coach: "Roberto Sánchez", phases: 5, exercises: 30, category: "Táctica", color: "hsl(var(--kpi-blue))" },
-  { id: 5, name: "Circuitos de Velocidad", coach: "Laura Gutiérrez", phases: 2, exercises: 12, category: "Físico", color: "hsl(var(--kpi-amber))" },
+  { id: 1, name: "Técnica", phases: 6, exercises: 36, category: "Técnica", color: "hsl(var(--primary))" },
+  { id: 2, name: "Físico", phases: 3, exercises: 18, category: "Físico", color: "hsl(var(--kpi-amber))" },
+  { id: 3, name: "Psicológico", phases: 3, exercises: 15, category: "Psicológico", color: "hsl(var(--kpi-green))" },
+  { id: 4, name: "Competencia (Táctico)", phases: 4, exercises: 24, category: "Competencia (Táctico)", color: "hsl(var(--kpi-blue))" },
 ];
 
 interface Cycle {
@@ -245,8 +244,7 @@ const Coaches = () => {
                     </div>
                     <Badge variant="secondary" className="text-[10px]">{m.category}</Badge>
                   </div>
-                  <h3 className="font-semibold text-sm text-foreground mb-1 group-hover:text-primary transition-colors">{m.name}</h3>
-                  <p className="text-xs text-muted-foreground mb-3">{m.coach}</p>
+                  <h3 className="font-semibold text-sm text-foreground mb-3 group-hover:text-primary transition-colors">{m.name}</h3>
                   <div className="flex gap-4 text-[11px] text-muted-foreground">
                     <span className="flex items-center gap-1"><Layers className="w-3 h-3" />{m.phases} fases</span>
                     <span className="flex items-center gap-1"><Dumbbell className="w-3 h-3" />{m.exercises} ejercicios</span>
@@ -424,7 +422,7 @@ const Coaches = () => {
             <div><label className="text-xs font-medium text-foreground mb-1 block">Nombre</label><Input placeholder="Ej: Periodización Táctica Avanzada" /></div>
             <div><label className="text-xs font-medium text-foreground mb-1 block">Categoría</label>
               <select className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
-                <option>Táctica</option><option>Técnica</option><option>Físico</option><option>Mental</option>
+                <option>Técnica</option><option>Físico</option><option>Psicológico</option><option>Competencia (Táctico)</option>
               </select>
             </div>
             <div><label className="text-xs font-medium text-foreground mb-1 block">Descripción</label><Textarea placeholder="Objetivos y enfoque de la metodología..." rows={3} /></div>
@@ -449,7 +447,7 @@ const Coaches = () => {
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-xs font-medium text-foreground mb-1 block">Categoría</label>
                 <select className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
-                  <option>Táctica</option><option>Técnica</option><option>Físico</option><option>Mental</option>
+                  <option>Técnica</option><option>Físico</option><option>Psicológico</option><option>Competencia (Táctico)</option>
                 </select>
               </div>
               <div><label className="text-xs font-medium text-foreground mb-1 block">Intensidad</label>
