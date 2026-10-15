@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { motion } from "framer-motion";
@@ -16,6 +17,7 @@ import {
 import api from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { UserAvatar } from "@/components/UserAvatar";
+import { ApiExercise, EXERCISE_CATEGORIES, INTENSITIES, categoryLabel, intensityLabel, intensityColor } from "@/lib/exercises";
 
 interface ApiCoach {
   id: string;
@@ -25,33 +27,6 @@ interface ApiCoach {
   categories: string[];
 }
 
-interface ApiExercise {
-  id: string;
-  name: string;
-  category: string;
-  intensity: string;
-  duration_minutes: number;
-  players: string;
-  description: string;
-}
-
-// Las 4 áreas de metodología del club — deben coincidir con `Exercise.Category` en el backend.
-const EXERCISE_CATEGORIES = [
-  { value: "tecnica", label: "Técnica" },
-  { value: "fisico", label: "Físico" },
-  { value: "psicologico", label: "Psicológico" },
-  { value: "competencia_tactico", label: "Competencia (Táctico)" },
-];
-
-const INTENSITIES = [
-  { value: "baja", label: "Baja" },
-  { value: "media", label: "Media" },
-  { value: "alta", label: "Alta" },
-];
-
-const categoryLabel = (value: string) => EXERCISE_CATEGORIES.find((c) => c.value === value)?.label ?? value;
-const intensityLabel = (value: string) => INTENSITIES.find((i) => i.value === value)?.label ?? value;
-
 // --- Mock Data (metodologías: aún no hay módulo real en el backend; los ejercicios sí se persisten en /api/v1/exercises/) ---
 
 const methodologies = [
@@ -60,9 +35,6 @@ const methodologies = [
   { id: 3, name: "Psicológico", phases: 3, category: "psicologico", color: "hsl(var(--kpi-green))" },
   { id: 4, name: "Competencia (Táctico)", phases: 4, category: "competencia_tactico", color: "hsl(var(--kpi-blue))" },
 ];
-
-const intensityColor = (i: string) =>
-  i === "alta" ? "text-destructive" : i === "media" ? "text-[hsl(var(--kpi-amber))]" : "text-[hsl(var(--primary))]";
 
 const emptyExerciseForm = {
   name: "",
@@ -74,6 +46,7 @@ const emptyExerciseForm = {
 };
 
 const Coaches = () => {
+  const navigate = useNavigate();
   const [coaches, setCoaches] = useState<ApiCoach[]>([]);
   const [exercises, setExercises] = useState<ApiExercise[]>([]);
   const [search, setSearch] = useState("");
@@ -82,13 +55,6 @@ const Coaches = () => {
   const [exerciseForm, setExerciseForm] = useState(emptyExerciseForm);
   const [savingExercise, setSavingExercise] = useState(false);
   const [activeTab, setActiveTab] = useState("methodologies");
-  const [exerciseCategoryFilter, setExerciseCategoryFilter] = useState<string | null>(null);
-
-  const openExercisesForMethodology = (category: string) => {
-    setExerciseCategoryFilter(category);
-    setSearch("");
-    setActiveTab("exercises");
-  };
 
   const loadExercises = useCallback(() => {
     return api
@@ -201,7 +167,7 @@ const Coaches = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {methodologies.filter((m) => m.name.toLowerCase().includes(search.toLowerCase())).map((m, i) => (
                 <motion.div key={m.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                  onClick={() => openExercisesForMethodology(m.category)}
+                  onClick={() => navigate(`/coaches/methodologies/${m.category}`)}
                   className="glass-card p-5 hover:shadow-md transition-shadow cursor-pointer group">
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${m.color}20` }}>
@@ -221,13 +187,7 @@ const Coaches = () => {
 
           {/* Exercises */}
           <TabsContent value="exercises">
-            <div className="flex items-center justify-between mb-4 gap-2">
-              {exerciseCategoryFilter ? (
-                <Badge variant="secondary" className="gap-1.5 text-xs font-normal">
-                  Filtrando por: {categoryLabel(exerciseCategoryFilter)}
-                  <button onClick={() => setExerciseCategoryFilter(null)} className="text-muted-foreground hover:text-foreground">×</button>
-                </Badge>
-              ) : <span />}
+            <div className="flex justify-end mb-4">
               <Button size="sm" className="gap-1.5 text-xs" onClick={() => setShowNewExercise(true)}>
                 <Plus className="w-3.5 h-3.5" />Nuevo Ejercicio
               </Button>
@@ -238,7 +198,6 @@ const Coaches = () => {
               )}
               {exercises
                 .filter((e) => e.name.toLowerCase().includes(search.toLowerCase()))
-                .filter((e) => !exerciseCategoryFilter || e.category === exerciseCategoryFilter)
                 .map((e, i) => (
                 <motion.div key={e.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.03 }}
                   className="glass-card p-4 hover:shadow-md transition-shadow cursor-pointer">

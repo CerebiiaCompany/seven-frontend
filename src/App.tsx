@@ -10,6 +10,7 @@ import Players from "./pages/Players.tsx";
 import PlayerProfile from "./pages/PlayerProfile.tsx";
 import Content from "./pages/Content.tsx";
 import Coaches from "./pages/Coaches.tsx";
+import MethodologyExercises from "./pages/MethodologyExercises.tsx";
 import Performance from "./pages/Performance.tsx";
 import Gamification from "./pages/Gamification.tsx";
 import GameSetup from "./pages/GameSetup.tsx";
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/players/:id" element={<ProtectedRoute><PlayerProfile /></ProtectedRoute>} />
             <Route path="/content" element={<ProtectedRoute><Content /></ProtectedRoute>} />
             <Route path="/coaches" element={<ProtectedRoute><Coaches /></ProtectedRoute>} />
+            <Route path="/coaches/methodologies/:category" element={<ProtectedRoute><MethodologyExercises /></ProtectedRoute>} />
             <Route path="/performance" element={<ProtectedRoute><Performance /></ProtectedRoute>} />
             <Route path="/gamification" element={<ProtectedRoute><Gamification /></ProtectedRoute>} />
             <Route path="/gamification/nuevo" element={<ProtectedRoute><GameSetup /></ProtectedRoute>} />
