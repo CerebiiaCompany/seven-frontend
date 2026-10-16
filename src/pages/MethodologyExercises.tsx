@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, ClipboardCheck, Clock, Pencil, Users, Activity, Zap, Heart, Save } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Clock, Pencil, Users, Activity, Zap, Heart, Save, CheckCircle2 } from "lucide-react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from "recharts";
 import api from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -75,21 +75,40 @@ const LEVEL_BADGE: Record<string, string> = {
 };
 
 const PhysicalTestPanel = ({
-  methodology, roster, rosterLoading,
+  methodology, roster, rosterLoading, categoryId, groupId,
 }: {
   methodology: string;
   roster: RosterPlayer[];
   rosterLoading: boolean;
+  categoryId: string;
+  groupId: string;
 }) => {
   const [playerId, setPlayerId] = useState("");
   const [evaluation, setEvaluation] = useState<PhysicalTestEvaluation | null>(null);
   const [loading, setLoading] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [completion, setCompletion] = useState<{ total: number; players: Record<string, number> }>({
+    total: 0, players: {},
+  });
 
   useEffect(() => {
     if (!playerId && roster.length > 0) setPlayerId(roster[0].id);
   }, [roster, playerId]);
+
+  const loadCompletion = useCallback(async () => {
+    if (!categoryId) return;
+    try {
+      const { data } = await api.get<{ total: number; players: Record<string, number> }>("/physical-tests/", {
+        params: { methodology, category_id: categoryId, group_id: groupId || undefined },
+      });
+      setCompletion(data);
+    } catch {
+      // deja el estado de avance vacío si falla, no bloquea la evaluación
+    }
+  }, [methodology, categoryId, groupId]);
+
+  useEffect(() => { loadCompletion(); }, [loadCompletion]);
 
   const applyEvaluation = (data: PhysicalTestEvaluation) => {
     setEvaluation(data);
@@ -129,6 +148,7 @@ const PhysicalTestPanel = ({
         methodology, entries,
       });
       applyEvaluation(data);
+      loadCompletion();
       toast({ title: "Evaluación guardada" });
     } catch {
       toast({ title: "No se pudo guardar la evaluación", variant: "destructive" });
@@ -151,7 +171,24 @@ const PhysicalTestPanel = ({
           <Select value={playerId} onValueChange={setPlayerId}>
             <SelectTrigger className="mt-1.5 w-full sm:max-w-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {roster.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>)}
+              {roster.map((p) => {
+                const filled = completion.players[p.id] ?? 0;
+                return (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>{p.full_name}</span>
+                      {completion.total > 0 && filled === completion.total && (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+                      )}
+                      {completion.total > 0 && filled > 0 && filled < completion.total && (
+                        <span className="text-[10px] text-[hsl(var(--kpi-amber))] font-medium">
+                          {filled}/{completion.total}
+                        </span>
+                      )}
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         )}
@@ -470,7 +507,13 @@ const MethodologyExercises = () => {
         </div>
 
         {category === "fisico" ? (
-          <PhysicalTestPanel methodology={category} roster={roster} rosterLoading={rosterLoading} />
+          <PhysicalTestPanel
+            methodology={category}
+            roster={roster}
+            rosterLoading={rosterLoading}
+            categoryId={categoryId}
+            groupId={groupId}
+          />
         ) : exercisesLoading ? (
           <p className="text-sm text-muted-foreground">Cargando ejercicios...</p>
         ) : exercises.length === 0 ? (
