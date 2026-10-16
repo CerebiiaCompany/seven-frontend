@@ -50,6 +50,7 @@ interface PhysicalTestGroupData {
   name: string;
   weight: number;
   score: number;
+  level: "bajo" | "medio" | "alto";
   metrics: PhysicalTestMetricData[];
 }
 
@@ -169,6 +170,9 @@ const PhysicalTestPanel = ({
                     <Icon className="w-4 h-4 text-primary" />
                     <h3 className="font-semibold text-sm text-foreground">{g.name}</h3>
                     <span className="text-[11px] text-muted-foreground">Ponderación {g.weight}%</span>
+                    <span className={`ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full ${LEVEL_BADGE[g.level]}`}>
+                      {g.score}% · {LEVEL_LABEL[g.level]}
+                    </span>
                   </div>
                   <div className="space-y-3">
                     {g.metrics.map((m) => (
@@ -195,6 +199,9 @@ const PhysicalTestPanel = ({
                           <span className="text-xs text-muted-foreground w-14 text-right flex-shrink-0">
                             {m.t_score !== null ? `T ${m.t_score}` : "T —"}
                           </span>
+                          <span className="text-xs text-muted-foreground w-10 text-right flex-shrink-0">
+                            {m.percentage !== null ? `${m.percentage}%` : "—"}
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -202,6 +209,9 @@ const PhysicalTestPanel = ({
                 </div>
               );
             })}
+            <p className="text-[11px] text-muted-foreground">
+              Fórmula: T = 50 + 10 × (valor – media) / DE de la categoría (invertida en pruebas de tiempo). T 20–80 se convierte a 0–100%.
+            </p>
           </div>
 
           <div className="glass-card p-5 h-fit lg:sticky lg:top-5">
@@ -217,7 +227,7 @@ const PhysicalTestPanel = ({
               <RadarChart data={radarData}>
                 <PolarGrid stroke="hsl(var(--border))" />
                 <PolarAngleAxis dataKey="attr" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
                 <Radar dataKey="value" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.25} strokeWidth={2} />
               </RadarChart>
             </ResponsiveContainer>
