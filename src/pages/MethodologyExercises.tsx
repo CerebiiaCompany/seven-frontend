@@ -423,63 +423,67 @@ const MethodologyExercises = () => {
     const color = categoryColor(category ?? "");
     return (
       <DashboardLayout>
-        <div className="p-4 sm:p-6 lg:p-8 max-w-lg mx-auto w-full">
-          <Button variant="ghost" size="sm" className="gap-1.5 text-xs mb-6 -ml-2" onClick={() => navigate("/coaches")}>
-            <ArrowLeft className="w-3.5 h-3.5" />Volver a Entrenadores
-          </Button>
+        <div className="min-h-[75vh] flex items-center justify-center p-4 sm:p-6 lg:p-8">
+          <div className="w-full max-w-xl">
+            <Button variant="ghost" size="sm" className="gap-1.5 text-xs mb-6 -ml-2" onClick={() => navigate("/coaches")}>
+              <ArrowLeft className="w-3.5 h-3.5" />Volver a Entrenadores
+            </Button>
 
-          <div className="glass-card p-6 sm:p-8">
-            <div className="flex flex-col items-center text-center mb-6">
-              <div
-                className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-                style={{ background: `${color}1a` }}
-              >
-                <ClipboardCheck className="w-7 h-7" style={{ color }} />
-              </div>
-              <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">{categoryLabel(category ?? "")}</h1>
-              <p className="text-sm text-muted-foreground mt-1.5">
-                Selecciona la categoría y el grupo para ver sus ejercicios y calificarlos
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <Label>Categoría</Label>
-                <Select
-                  value={categoryId}
-                  onValueChange={(v) => { setCategoryId(v); setGroupId(""); }}
-                  disabled={categoriesLoading || categories.length === 0}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6 sm:p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: `${color}1a` }}
                 >
-                  <SelectTrigger className="mt-1.5 w-full">
-                    <SelectValue placeholder={categoriesLoading ? "Cargando categorías..." : "Selecciona una categoría"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                  <ClipboardCheck className="w-6 h-6" style={{ color }} />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground truncate">{categoryLabel(category ?? "")}</h1>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Selecciona la categoría y el grupo para ver sus ejercicios y calificarlos
+                  </p>
+                </div>
               </div>
 
-              <div>
-                <Label>Grupo</Label>
-                {!selectedCategory ? (
-                  <Select disabled value="">
-                    <SelectTrigger className="mt-1.5 w-full"><SelectValue placeholder="Selecciona primero una categoría" /></SelectTrigger>
-                    <SelectContent />
-                  </Select>
-                ) : selectedCategory.groups.length === 0 ? (
-                  <p className="text-xs text-muted-foreground mt-1.5">Esta categoría no tiene grupos creados.</p>
-                ) : (
-                  <Select value={groupId} onValueChange={setGroupId}>
-                    <SelectTrigger className="mt-1.5 w-full"><SelectValue placeholder="Selecciona un grupo" /></SelectTrigger>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>Categoría</Label>
+                  <Select
+                    value={categoryId}
+                    onValueChange={(v) => { setCategoryId(v); setGroupId(""); }}
+                    disabled={categoriesLoading || categories.length === 0}
+                  >
+                    <SelectTrigger className="mt-1.5 w-full">
+                      <SelectValue placeholder={categoriesLoading ? "Cargando categorías..." : "Selecciona una categoría"} />
+                    </SelectTrigger>
                     <SelectContent>
-                      {selectedCategory.groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                      {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                )}
+                </div>
+
+                <div>
+                  <Label>Grupo</Label>
+                  {!selectedCategory ? (
+                    <Select disabled value="">
+                      <SelectTrigger className="mt-1.5 w-full"><SelectValue placeholder="Selecciona primero una categoría" /></SelectTrigger>
+                      <SelectContent />
+                    </Select>
+                  ) : selectedCategory.groups.length === 0 ? (
+                    <p className="text-xs text-muted-foreground mt-1.5 py-2.5">Esta categoría no tiene grupos creados.</p>
+                  ) : (
+                    <Select value={groupId} onValueChange={setGroupId}>
+                      <SelectTrigger className="mt-1.5 w-full"><SelectValue placeholder="Selecciona un grupo" /></SelectTrigger>
+                      <SelectContent>
+                        {selectedCategory.groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
               </div>
 
-              <Button className="w-full gap-2" onClick={confirmSelection}>Continuar</Button>
-            </div>
+              <Button className="w-full gap-2 mt-6" onClick={confirmSelection}>Continuar</Button>
+            </motion.div>
           </div>
         </div>
       </DashboardLayout>
