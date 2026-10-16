@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, ClipboardCheck, Clock, Pencil, Users } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Clock, Pencil, Users, Activity, Zap, Heart, Save } from "lucide-react";
+import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from "recharts";
 import api from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -31,6 +32,204 @@ interface RosterPlayer {
   full_name: string;
   photo: string | null;
 }
+
+// --- Evaluación física (baremo): solo para la metodología "fisico" ---
+
+interface PhysicalTestMetricData {
+  exercise_id: string;
+  name: string;
+  unit: string;
+  weight: number;
+  higher_is_better: boolean;
+  value: number | null;
+  t_score: number | null;
+  percentage: number | null;
+}
+
+interface PhysicalTestGroupData {
+  name: string;
+  weight: number;
+  score: number;
+  metrics: PhysicalTestMetricData[];
+}
+
+interface PhysicalTestEvaluation {
+  player: { id: string; full_name: string };
+  groups: PhysicalTestGroupData[];
+  overall: { percentage: number; level: "bajo" | "medio" | "alto" };
+  radar: { group: string; value: number }[];
+}
+
+const GROUP_ICONS: Record<string, typeof Activity> = {
+  Fuerza: Activity,
+  Velocidad: Zap,
+  Resistencia: Heart,
+};
+
+const LEVEL_LABEL: Record<string, string> = { bajo: "Bajo", medio: "Medio", alto: "Alto" };
+const LEVEL_BADGE: Record<string, string> = {
+  bajo: "text-destructive bg-destructive/15",
+  medio: "text-[hsl(var(--kpi-amber))] bg-[hsl(var(--kpi-amber))]/15",
+  alto: "text-primary bg-primary/15",
+};
+
+const PhysicalTestPanel = ({
+  methodology, roster, rosterLoading,
+}: {
+  methodology: string;
+  roster: RosterPlayer[];
+  rosterLoading: boolean;
+}) => {
+  const [playerId, setPlayerId] = useState("");
+  const [evaluation, setEvaluation] = useState<PhysicalTestEvaluation | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!playerId && roster.length > 0) setPlayerId(roster[0].id);
+  }, [roster, playerId]);
+
+  const applyEvaluation = (data: PhysicalTestEvaluation) => {
+    setEvaluation(data);
+    const next: Record<string, string> = {};
+    data.groups.forEach((g) => g.metrics.forEach((m) => {
+      next[m.exercise_id] = m.value !== null ? String(m.value) : "";
+    }));
+    setValues(next);
+  };
+
+  const loadEvaluation = useCallback(async () => {
+    if (!playerId) return;
+    setLoading(true);
+    try {
+      const { data } = await api.get<PhysicalTestEvaluation>(`/physical-tests/${playerId}/`, {
+        params: { methodology },
+      });
+      applyEvaluation(data);
+    } catch {
+      toast({ title: "No se pudo cargar la evaluación", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }, [playerId, methodology]);
+
+  useEffect(() => { loadEvaluation(); }, [loadEvaluation]);
+
+  const saveEvaluation = async () => {
+    if (!playerId || !evaluation) return;
+    setSaving(true);
+    try {
+      const entries = evaluation.groups.flatMap((g) => g.metrics.map((m) => ({
+        exercise_id: m.exercise_id,
+        value: values[m.exercise_id] ? Number(values[m.exercise_id]) : null,
+      })));
+      const { data } = await api.put<PhysicalTestEvaluation>(`/physical-tests/${playerId}/`, {
+        methodology, entries,
+      });
+      applyEvaluation(data);
+      toast({ title: "Evaluación guardada" });
+    } catch {
+      toast({ title: "No se pudo guardar la evaluación", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const radarData = evaluation?.radar.map((r) => ({ attr: r.group, value: r.value })) ?? [];
+
+  return (
+    <div className="space-y-5">
+      <div className="glass-card p-5">
+        <Label>Deportista</Label>
+        {rosterLoading ? (
+          <p className="text-sm text-muted-foreground mt-1.5">Cargando deportistas...</p>
+        ) : roster.length === 0 ? (
+          <p className="text-sm text-muted-foreground mt-1.5">No hay deportistas confirmados en esa categoría/grupo.</p>
+        ) : (
+          <Select value={playerId} onValueChange={setPlayerId}>
+            <SelectTrigger className="mt-1.5 w-full sm:max-w-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {roster.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      {loading || !evaluation ? (
+        <p className="text-sm text-muted-foreground">Cargando evaluación...</p>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="lg:col-span-2 space-y-4">
+            {evaluation.groups.map((g) => {
+              const Icon = GROUP_ICONS[g.name] ?? Activity;
+              return (
+                <div key={g.name} className="glass-card p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Icon className="w-4 h-4 text-primary" />
+                    <h3 className="font-semibold text-sm text-foreground">{g.name}</h3>
+                    <span className="text-[11px] text-muted-foreground">Ponderación {g.weight}%</span>
+                  </div>
+                  <div className="space-y-3">
+                    {g.metrics.map((m) => (
+                      <div key={m.exercise_id} className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+                        <div className="min-w-0">
+                          <p className="text-sm text-foreground">{m.name}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Peso {m.weight}% · {m.higher_is_better ? "mayor es mejor" : "menor es mejor"}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              className="w-24 pr-8 text-right"
+                              value={values[m.exercise_id] ?? ""}
+                              onChange={(e) => setValues((v) => ({ ...v, [m.exercise_id]: e.target.value }))}
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground pointer-events-none">
+                              {m.unit}
+                            </span>
+                          </div>
+                          <span className="text-xs text-muted-foreground w-14 text-right flex-shrink-0">
+                            {m.t_score !== null ? `T ${m.t_score}` : "T —"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="glass-card p-5 h-fit lg:sticky lg:top-5">
+            <p className="text-xs text-muted-foreground mb-2">Resultado general</p>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-3xl font-bold text-foreground">{evaluation.overall.percentage}%</span>
+              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${LEVEL_BADGE[evaluation.overall.level]}`}>
+                {LEVEL_LABEL[evaluation.overall.level]}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mb-4">0–50% Bajo · 51–80% Medio · 81–100% Alto</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <RadarChart data={radarData}>
+                <PolarGrid stroke="hsl(var(--border))" />
+                <PolarAngleAxis dataKey="attr" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
+                <Radar dataKey="value" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.25} strokeWidth={2} />
+              </RadarChart>
+            </ResponsiveContainer>
+            <Button className="w-full gap-2 mt-2" disabled={saving} onClick={saveEvaluation}>
+              <Save className="w-4 h-4" />{saving ? "Guardando..." : "Guardar evaluación"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const MethodologyExercises = () => {
   const { category } = useParams<{ category: string }>();
@@ -260,7 +459,9 @@ const MethodologyExercises = () => {
           </div>
         </div>
 
-        {exercisesLoading ? (
+        {category === "fisico" ? (
+          <PhysicalTestPanel methodology={category} roster={roster} rosterLoading={rosterLoading} />
+        ) : exercisesLoading ? (
           <p className="text-sm text-muted-foreground">Cargando ejercicios...</p>
         ) : exercises.length === 0 ? (
           <p className="text-sm text-muted-foreground">Todavía no hay ejercicios en esta metodología.</p>
