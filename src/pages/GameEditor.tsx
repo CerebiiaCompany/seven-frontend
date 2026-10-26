@@ -134,6 +134,30 @@ const buildLinePath = (l: { x1: number; y1: number; x2: number; y2: number; shap
 // Marcado de la cancha: 3 tipos x 3 colores
 // ---------------------------------------------------------------------------
 
+// El área de penalti ocupa el 4%–20% del campo (top-[4%] + h-[16%] más
+// abajo); el arco debe nacer exactamente en ese borde (20%), sin solaparse
+// con el área ni separarse de ella.
+const PENALTY_BOX_EDGE_PCT = 20;
+// Ancho de cuerda y profundidad (sagita) del arco, en % del campo — mismo
+// tamaño que el diseño original (w-[18%] h-[4%]), para no alterar las
+// proporciones ya ajustadas visualmente.
+const ARC_CHORD_PCT = 18;
+const ARC_SAGITTA_PCT = 4;
+// Radio real de un arco circular cuya cuerda y sagita son las anteriores
+// (fórmula estándar cuerda/sagita: r = (cuerda²/4 + sagita²) / (2·sagita)).
+// Sustituye la curva Bézier cuadrática previa, que no era un arco de
+// circunferencia real y por eso se veía con una curvatura inconsistente.
+const ARC_RADIUS_PCT = (ARC_CHORD_PCT ** 2 / 4 + ARC_SAGITTA_PCT ** 2) / (2 * ARC_SAGITTA_PCT);
+// Arco cuya cuerda es el borde del área (y=0) y cuya sagita (y=ARC_SAGITTA_PCT)
+// apunta hacia fuera del área, es decir, hacia el centro del campo.
+// sweep-flag=0: con radio > sagita, es el que curva hacia "y" creciente
+// (verificado render-to-pixel; con sweep-flag=1 la sagita cae en "y"
+// negativo, fuera del viewBox, y el arco queda invisible).
+const ARC_PATH_AWAY_FROM_GOAL = `M 0 0 A ${ARC_RADIUS_PCT} ${ARC_RADIUS_PCT} 0 0 0 ${ARC_CHORD_PCT} 0`;
+// Mismo arco espejado verticalmente: la cuerda queda en y=ARC_SAGITTA_PCT
+// (pegada al borde del área) y la sagita en y=0 (hacia fuera del área).
+const ARC_PATH_TOWARD_GOAL = `M 0 ${ARC_SAGITTA_PCT} A ${ARC_RADIUS_PCT} ${ARC_RADIUS_PCT} 0 0 1 ${ARC_CHORD_PCT} ${ARC_SAGITTA_PCT}`;
+
 const GoalBox = ({ side, line }: { side: "top" | "bottom"; line: string }) => {
   // Las clases de Tailwind deben aparecer completas y literales en el código
   // fuente: el compilador JIT las detecta vía análisis estático del texto del
@@ -145,14 +169,42 @@ const GoalBox = ({ side, line }: { side: "top" | "bottom"; line: string }) => {
   // tanto en cancha completa como en media cancha. La solución es mantener
   // ambas ramas como literales completos para que el JIT las detecte siempre.
   const isTop = side === "top";
-  const svgPath = isTop ? "M 5 0 Q 50 35 95 0" : "M 5 30 Q 50 -5 95 30";
   return (
     <>
       <div className={`absolute left-1/2 -translate-x-1/2 w-[52%] h-[16%] border-2 ${isTop ? "top-[4%] border-t-0" : "bottom-[4%] border-b-0"}`} style={{ borderColor: line }} />
       <div className={`absolute left-1/2 -translate-x-1/2 w-[28%] h-[8%] border-2 ${isTop ? "top-[4%] border-t-0" : "bottom-[4%] border-b-0"}`} style={{ borderColor: line }} />
       <div className={`absolute left-1/2 -translate-x-1/2 w-[14%] h-[2.5%] border-2 ${isTop ? "top-[1.5%] rounded-t-sm" : "bottom-[1.5%] rounded-b-sm"}`} style={{ borderColor: line, opacity: 0.6 }} />
-      <svg className={`absolute left-1/2 -translate-x-1/2 w-[18%] h-[4%] ${isTop ? "top-[18%]" : "bottom-[18%]"}`} viewBox="0 0 100 30" fill="none">
-        <path d={svgPath} stroke={line} strokeWidth="2" fill="none" opacity={0.8} />
+      {/*
+        El arco se posiciona con `style` (no con una clase de Tailwind
+        interpolada) porque PENALTY_BOX_EDGE_PCT es un valor calculado, no un
+        literal que el JIT pueda detectar — el mismo motivo por el que las
+        clases de arriba deben escribirse completas. Se ancla exactamente en
+        el borde del área (20%), así que el svg no se solapa con el área ni
+        queda separado de ella.
+
+        El contenedor del campo no tiene unidades cuadradas (su alto en % no
+        equivale a su ancho en %, por el aspect-ratio del tablero), así que
+        fijar ancho y alto como dos porcentajes independientes distorsionaría
+        el arco (dejaría de ser un arco de circunferencia real). Por eso el
+        alto se calcula con `aspect-[...]` a partir del ancho — la misma
+        técnica que ya usan los círculos de esta cancha (`aspect-square`) —
+        para que el viewBox coincida en píxeles reales con el tamaño
+        renderizado y el arco no se deforme.
+      */}
+      <svg
+        className="absolute left-1/2 -translate-x-1/2 w-[18%] aspect-[18/4]"
+        style={{ [isTop ? "top" : "bottom"]: `${PENALTY_BOX_EDGE_PCT}%` }}
+        viewBox={`0 0 ${ARC_CHORD_PCT} ${ARC_SAGITTA_PCT}`}
+        fill="none"
+      >
+        <path
+          d={isTop ? ARC_PATH_AWAY_FROM_GOAL : ARC_PATH_TOWARD_GOAL}
+          stroke={line}
+          strokeWidth="2"
+          vectorEffect="non-scaling-stroke"
+          fill="none"
+          opacity={0.8}
+        />
       </svg>
       <div className={`absolute left-1/2 w-1 h-1 -translate-x-1/2 rounded-full ${isTop ? "top-[15%]" : "bottom-[15%]"}`} style={{ background: line }} />
     </>
