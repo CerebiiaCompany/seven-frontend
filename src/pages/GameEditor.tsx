@@ -135,17 +135,26 @@ const buildLinePath = (l: { x1: number; y1: number; x2: number; y2: number; shap
 // ---------------------------------------------------------------------------
 
 const GoalBox = ({ side, line }: { side: "top" | "bottom"; line: string }) => {
-  const s = side;
-  const svgPath = side === "top" ? "M 5 0 Q 50 35 95 0" : "M 5 30 Q 50 -5 95 30";
+  // Las clases de Tailwind deben aparecer completas y literales en el código
+  // fuente: el compilador JIT las detecta vía análisis estático del texto del
+  // archivo, no evaluando JS. `` `${s}-[4%]` `` nunca coincide con ninguna
+  // clase real ("top-[4%]"/"bottom-[4%]" no existen como texto literal), así
+  // que Tailwind no genera CSS para ella y el elemento queda sin `top`/`bottom`
+  // (cae a su posición estática, la esquina superior del campo) — por eso la
+  // portería y el área aparecían desplazadas/duplicadas en la esquina superior
+  // tanto en cancha completa como en media cancha. La solución es mantener
+  // ambas ramas como literales completos para que el JIT las detecte siempre.
+  const isTop = side === "top";
+  const svgPath = isTop ? "M 5 0 Q 50 35 95 0" : "M 5 30 Q 50 -5 95 30";
   return (
     <>
-      <div className={`absolute left-1/2 -translate-x-1/2 ${s}-[4%] w-[52%] h-[16%] border-2 border-${s === "top" ? "t" : "b"}-0`} style={{ borderColor: line }} />
-      <div className={`absolute left-1/2 -translate-x-1/2 ${s}-[4%] w-[28%] h-[8%] border-2 border-${s === "top" ? "t" : "b"}-0`} style={{ borderColor: line }} />
-      <div className={`absolute left-1/2 -translate-x-1/2 ${s}-[1.5%] w-[14%] h-[2.5%] border-2 rounded-${s === "top" ? "t" : "b"}-sm`} style={{ borderColor: line, opacity: 0.6 }} />
-      <svg className={`absolute left-1/2 -translate-x-1/2 ${s}-[18%] w-[18%] h-[4%]`} viewBox="0 0 100 30" fill="none">
+      <div className={`absolute left-1/2 -translate-x-1/2 w-[52%] h-[16%] border-2 ${isTop ? "top-[4%] border-t-0" : "bottom-[4%] border-b-0"}`} style={{ borderColor: line }} />
+      <div className={`absolute left-1/2 -translate-x-1/2 w-[28%] h-[8%] border-2 ${isTop ? "top-[4%] border-t-0" : "bottom-[4%] border-b-0"}`} style={{ borderColor: line }} />
+      <div className={`absolute left-1/2 -translate-x-1/2 w-[14%] h-[2.5%] border-2 ${isTop ? "top-[1.5%] rounded-t-sm" : "bottom-[1.5%] rounded-b-sm"}`} style={{ borderColor: line, opacity: 0.6 }} />
+      <svg className={`absolute left-1/2 -translate-x-1/2 w-[18%] h-[4%] ${isTop ? "top-[18%]" : "bottom-[18%]"}`} viewBox="0 0 100 30" fill="none">
         <path d={svgPath} stroke={line} strokeWidth="2" fill="none" opacity={0.8} />
       </svg>
-      <div className={`absolute left-1/2 ${s}-[15%] w-1 h-1 -translate-x-1/2 rounded-full`} style={{ background: line }} />
+      <div className={`absolute left-1/2 w-1 h-1 -translate-x-1/2 rounded-full ${isTop ? "top-[15%]" : "bottom-[15%]"}`} style={{ background: line }} />
     </>
   );
 };
@@ -170,9 +179,23 @@ const FieldMarkings = ({ courtType, mirrored, line }: { courtType: BoardDetail["
       {courtType === "half" && (
         <>
           <div className="absolute left-[4%] right-[4%] h-0.5" style={{ background: line, [goalSide === "bottom" ? "top" : "bottom"]: "4%" }} />
+          {/*
+            Semicírculo central: se dibuja el círculo completo centrado
+            exactamente sobre la línea de medio campo (igual que en cancha
+            completa) y se recorta con `clip-path` a la mitad que mira hacia
+            la portería visible. El recorte es geométrico, sobre las
+            coordenadas locales del propio círculo (0–50% / 50–100%), así que
+            su borde recto siempre coincide con la línea de medio campo sin
+            depender de que algún contenedor ancestro recorte el desbordamiento.
+          */}
           <div
             className="absolute left-1/2 w-[36%] aspect-square -translate-x-1/2 rounded-full border-2"
-            style={{ borderColor: line, [goalSide === "bottom" ? "top" : "bottom"]: "4%", transform: `translate(-50%, ${goalSide === "bottom" ? "-50%" : "50%"})` }}
+            style={{
+              borderColor: line,
+              [goalSide === "bottom" ? "top" : "bottom"]: "4%",
+              transform: `translate(-50%, ${goalSide === "bottom" ? "-50%" : "50%"})`,
+              clipPath: goalSide === "bottom" ? "inset(50% 0 0 0)" : "inset(0 0 50% 0)",
+            }}
           />
           <GoalBox side={goalSide} line={line} />
         </>
