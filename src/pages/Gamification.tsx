@@ -34,6 +34,7 @@ const Gamification = () => {
   const [boards, setBoards] = useState<BoardListItem[]>([]);
   const [boardsLoading, setBoardsLoading] = useState(true);
   const [boardsDenied, setBoardsDenied] = useState(false);
+  const [brokenThumbnails, setBrokenThumbnails] = useState<Set<string>>(new Set());
 
   const loadBoards = useCallback(async () => {
     setBoardsLoading(true);
@@ -137,8 +138,13 @@ const Gamification = () => {
                       onClick={() => navigate(`/gamification/${board.id}`)}
                       className="block w-full aspect-[4/3] bg-muted/40 overflow-hidden"
                     >
-                      {board.thumbnail ? (
-                        <img src={board.thumbnail} alt={board.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      {board.thumbnail && !brokenThumbnails.has(board.id) ? (
+                        <img
+                          src={board.thumbnail}
+                          alt={board.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          onError={() => setBrokenThumbnails((prev) => new Set(prev).add(board.id))}
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <ImageOff className="w-8 h-8 text-muted-foreground/30" />
