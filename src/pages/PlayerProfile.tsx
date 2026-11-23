@@ -1,9 +1,9 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { isAxiosError } from "axios";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ArrowLeft, Calendar, MapPin, Award, TrendingUp, Video, Upload, Play, Trash2, History } from "lucide-react";
-import { loadPlayers, fetchPlayer, type Player, type PositionEntry } from "./Players";
+import { loadPlayers, fetchPlayer, playerProfilePath, type Player, type PositionEntry } from "./Players";
 import { motion } from "framer-motion";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -46,30 +46,59 @@ const evolutionData = [
   { month: "Mar", rating: 82 },
 ];
 
+const findCachedPlayer = (idOrSlug: string | undefined) =>
+  loadPlayers().find((p) => p.slug === idOrSlug || String(p.id) === String(idOrSlug)) ?? null;
+
 const PlayerProfile = () => {
+  // `id` es el segmento de la ruta: el slug o un UUID de un enlace antiguo.
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const canonicalizedSlug = useRef<string | null>(null);
   // Se muestra de inmediato lo que haya en caché (si se llegó desde el
   // listado) y se reemplaza en cuanto responde el backend, para que un
-  // refresh o un link directo a /players/:id también traiga al jugador real.
-  const [real, setReal] = useState<Player | null>(
-    () => loadPlayers().find((p) => String(p.id) === String(id)) ?? null
-  );
+  // refresh o un link directo a /players/:slug también traiga al jugador real.
+  const [real, setReal] = useState<Player | null>(() => findCachedPlayer(id));
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
 
   useEffect(() => {
     if (!id) return;
+    // El UUID ya se resolvió: cambiar la URL al slug no requiere otra consulta.
+    if (canonicalizedSlug.current === id) {
+      canonicalizedSlug.current = null;
+      return;
+    }
+    let cancelled = false;
+    setReal(findCachedPlayer(id));
     setLoading(true);
     setDenied(false);
     fetchPlayer(id)
-      .then(setReal)
+      .then((fetched) => {
+        if (cancelled) return;
+        setReal(fetched);
+        setLoading(false);
+        if (fetched.slug && fetched.slug !== id) {
+          canonicalizedSlug.current = fetched.slug;
+          navigate(
+            { pathname: playerProfilePath(fetched), search: location.search, hash: location.hash },
+            { replace: true, state: location.state },
+          );
+        }
+      })
       .catch((error) => {
-        if (isAxiosError(error) && (error.response?.status === 403 || error.response?.status === 404)) {
+        if (!cancelled && isAxiosError(error) && (error.response?.status === 403 || error.response?.status === 404)) {
           setDenied(true);
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Solo debe resolverse de nuevo cuando cambia el segmento de la URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const player = real
@@ -85,7 +114,8 @@ const PlayerProfile = () => {
       }
     : playerData;
   const positionHistory: PositionEntry[] = real?.positionHistory ?? [];
-  const videosKey = `sf_player_videos_${id || "default"}`;
+  // Los videos locales siguen ligados al UUID, que no cambia con la URL.
+  const videosKey = `sf_player_videos_${real?.id || id || "default"}`;
   const [videos, setVideos] = useState<PlayerVideo[]>([]);
   const [playing, setPlaying] = useState<PlayerVideo | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);

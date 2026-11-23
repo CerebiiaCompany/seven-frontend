@@ -26,6 +26,8 @@ export interface PositionEntry {
 
 export interface Player {
   id: string;
+  // Opcional: la caché `sf_players` puede traer fichas anteriores al slug.
+  slug?: string;
   name: string;
   age: number;
   category: string;
@@ -45,6 +47,7 @@ export interface Player {
 
 interface ApiPlayer {
   id: string;
+  slug: string;
   full_name: string;
   email: string;
   photo: string | null;
@@ -68,7 +71,10 @@ export const PLAYERS_STORAGE_KEY = STORAGE_KEY;
 export const loadPlayers = (): Player[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((p): p is Player => Boolean(p?.id));
+    }
   } catch { /* ignore */ }
   return [];
 };
@@ -82,6 +88,9 @@ const cachePlayers = (fetched: Player[]) => {
   savePlayers(Array.from(merged.values()));
 };
 
+export const playerProfilePath = (player: Pick<Player, "id" | "slug">) =>
+  `/players/${player.slug || player.id}`;
+
 export const playerPositions = ["Portero", "Defensa", "Mediocampista", "Delantero"];
 
 const ageFrom = (birth: string | null | undefined) => {
@@ -94,6 +103,7 @@ const ageFrom = (birth: string | null | undefined) => {
 
 const mapApiPlayer = (r: ApiPlayer): Player => ({
   id: r.id,
+  slug: r.slug,
   name: r.full_name || "Sin nombre",
   age: ageFrom(r.birth_date) ?? 0,
   category: r.category?.name || "Sin categoría",
@@ -111,10 +121,10 @@ const mapApiPlayer = (r: ApiPlayer): Player => ({
 });
 
 // Trae un deportista puntual desde el backend (no depende de haber pasado
-// antes por el listado): así /players/:id funciona también en un refresh
+// antes por el listado): así /players/:slug (o un UUID antiguo) funciona también en un refresh
 // o al llegar por link directo.
-export const fetchPlayer = async (id: string): Promise<Player> => {
-  const { data } = await api.get<ApiPlayer>(`/players/${id}/`);
+export const fetchPlayer = async (idOrSlug: string): Promise<Player> => {
+  const { data } = await api.get<ApiPlayer>(`/players/${encodeURIComponent(idOrSlug)}/`);
   const player = mapApiPlayer(data);
   cachePlayers([player]);
   return player;
@@ -258,7 +268,7 @@ const Players = () => {
                     <tr
                       key={player.id}
                       className="border-b border-border/50 hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/players/${player.id}`)}
+                      onClick={() => navigate(playerProfilePath(player))}
                     >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
@@ -290,7 +300,7 @@ const Players = () => {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={(e) => { e.stopPropagation(); navigate(`/players/${player.id}`); }}
+                            onClick={(e) => { e.stopPropagation(); navigate(playerProfilePath(player)); }}
                             aria-label={`Ver ${player.name}`}
                           >
                             <ChevronRight className="w-4 h-4 text-muted-foreground" />
