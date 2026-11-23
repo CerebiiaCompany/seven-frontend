@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChevronLeft, ChevronRight, Plus, MapPin, Clock, Users,
-  Trophy, Dumbbell, ClipboardCheck, Pencil, Trash2, CalendarDays,
+  Trophy, Dumbbell, ClipboardCheck, Pencil, Trash2, CalendarDays, Cake,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -110,6 +110,62 @@ const mapEvent = (r: ApiTrainingSession): EventItem => {
   };
 };
 
+interface ApiPlayerBirthday {
+  id: string;
+  full_name: string;
+  birth_date: string | null;
+  status: "pending" | "confirmed" | "rejected";
+  category: { id: string; name: string } | null;
+}
+
+interface BirthdayPlayer {
+  id: string;
+  name: string;
+  category: string;
+  birthYear: number;
+  birthMonth: number; // 0-11
+  birthDay: number;
+}
+
+interface BirthdayItem extends BirthdayPlayer {
+  day: number;
+  age: number;
+}
+
+// Lee `YYYY-MM-DD` como fecha local (sin pasar por UTC) y descarta fechas imposibles.
+const parseBirthDate = (value: string | null) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? "");
+  if (!match) return null;
+  const [year, month, day] = match.slice(1).map(Number);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return { year, month: month - 1, day };
+};
+
+const mapBirthdayPlayer = (r: ApiPlayerBirthday): BirthdayPlayer | null => {
+  const birth = r.status === "confirmed" ? parseBirthDate(r.birth_date) : null;
+  if (!birth) return null;
+  return {
+    id: r.id,
+    name: r.full_name || "Sin nombre",
+    category: r.category?.name || "Sin categoría",
+    birthYear: birth.year,
+    birthMonth: birth.month,
+    birthDay: birth.day,
+  };
+};
+
+// Se calcula por mes visible; nunca se guarda. Un 29 de febrero cae el 28 en años no bisiestos.
+const birthdaysInMonth = (players: BirthdayPlayer[], monthDate: Date): BirthdayItem[] => {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const lastDay = getDaysInMonth(monthDate);
+  return players
+    .filter((p) => p.birthMonth === month && year > p.birthYear)
+    .map((p) => ({ ...p, day: Math.min(p.birthDay, lastDay), age: year - p.birthYear }))
+    .sort((a, b) => a.day - b.day || a.name.localeCompare(b.name, "es"));
+};
+
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const emptyForm = { type: "training", title: "", date: "", time: "", venueId: "", categoryId: "", groupId: "" };
@@ -122,6 +178,8 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
   const [selected, setSelected] = useState<EventItem | null>(null);
+  const [birthdayPlayers, setBirthdayPlayers] = useState<BirthdayPlayer[]>([]);
+  const [selectedBirthday, setSelectedBirthday] = useState<BirthdayItem | null>(null);
   const [dayOpen, setDayOpen] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -203,7 +261,37 @@ export default function CalendarPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Independiente de los eventos: si falla o el rol no tiene permiso, el calendario sigue igual.
+  useEffect(() => {
+    let cancelled = false;
+    const loadBirthdays = async () => {
+      const players = new Map<string, BirthdayPlayer>();
+      try {
+        for (let page = 1; !cancelled; page += 1) {
+          const { data } = await api.get<{ next: string | null; results: ApiPlayerBirthday[] }>("/players/", {
+            params: { status: "confirmed", page_size: 100, page },
+          });
+          for (const r of data.results) {
+            const player = mapBirthdayPlayer(r);
+            if (player) players.set(player.id, player);
+          }
+          if (!data.next) break;
+        }
+      } catch (error) {
+        if (!cancelled && !(isAxiosError(error) && error.response?.status === 403)) {
+          toast.error("No se pudieron cargar los cumpleaños");
+        }
+      }
+      if (!cancelled) setBirthdayPlayers(Array.from(players.values()));
+    };
+    loadBirthdays();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const birthdays = useMemo(() => birthdaysInMonth(birthdayPlayers, monthDate), [birthdayPlayers, monthDate]);
+
   const getEventForDay = (day: number) => events.filter((e) => e.day === day);
+  const getBirthdaysForDay = (day: number) => birthdays.filter((b) => b.day === day);
 
   const removeEvent = async (id: string) => {
     try {
@@ -463,19 +551,39 @@ export default function CalendarPage() {
                   {Array.from({ length: daysInMonth }).map((_, i) => {
                     const day = i + 1;
                     const dayEvents = getEventForDay(day);
+                    const dayBirthdays = getBirthdaysForDay(day);
+                    // Con eventos y cumpleaños el mismo día, se ve al menos uno de cada tipo.
+                    const visibleBirthdays = dayBirthdays.slice(0, dayEvents.length ? 1 : 2);
+                    const visibleEvents = dayEvents.slice(0, 2 - visibleBirthdays.length);
+                    const totalItems = dayEvents.length + dayBirthdays.length;
+                    const hiddenItems = totalItems - visibleBirthdays.length - visibleEvents.length;
                     const isToday = isCurrentMonth && day === today.getDate();
                     return (
                       <motion.div
                         key={day}
                         whileHover={{ scale: 1.02 }}
-                        onClick={() => dayEvents.length && (dayEvents.length === 1 ? setSelected(dayEvents[0]) : setDayOpen(day))}
+                        onClick={() => {
+                          if (totalItems > 1) setDayOpen(day);
+                          else if (dayBirthdays.length) setSelectedBirthday(dayBirthdays[0]);
+                          else if (dayEvents.length) setSelected(dayEvents[0]);
+                        }}
                         className={`aspect-square rounded-lg border p-1.5 cursor-pointer transition-all flex flex-col ${
                           isToday ? "bg-primary/10 border-primary" : "bg-card border-border hover:border-primary/40"
                         }`}
                       >
                         <span className={`text-xs font-semibold ${isToday ? "text-primary" : ""}`}>{day}</span>
                         <div className="flex-1 space-y-0.5 mt-0.5 overflow-hidden">
-                          {dayEvents.slice(0, 2).map((e) => (
+                          {visibleBirthdays.map((b) => (
+                            <div
+                              key={`birthday-${b.id}`}
+                              title={`Cumpleaños de ${b.name}`}
+                              className="text-[9px] px-1 py-0.5 rounded font-medium flex items-center gap-0.5 bg-[hsl(var(--chart-4)/0.2)] text-[hsl(var(--chart-4))]"
+                            >
+                              <Cake className="w-2.5 h-2.5 flex-shrink-0" />
+                              <span className="truncate">{b.name}</span>
+                            </div>
+                          ))}
+                          {visibleEvents.map((e) => (
                             <div
                               key={e.id}
                               className={`text-[9px] px-1 py-0.5 rounded truncate font-medium ${
@@ -487,8 +595,8 @@ export default function CalendarPage() {
                               {e.time} {e.title.split(" ")[0]}
                             </div>
                           ))}
-                          {dayEvents.length > 2 && (
-                            <div className="text-[9px] text-muted-foreground">+{dayEvents.length - 2}</div>
+                          {hiddenItems > 0 && (
+                            <div className="text-[9px] text-muted-foreground">+{hiddenItems}</div>
                           )}
                         </div>
                       </motion.div>
@@ -497,9 +605,10 @@ export default function CalendarPage() {
                 </div>
               )}
 
-              <div className="flex gap-4 mt-6 text-xs">
+              <div className="flex flex-wrap gap-4 mt-6 text-xs">
                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-primary/30" /> Entrenamiento</div>
                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[hsl(var(--kpi-amber)/0.4)]" /> Partido</div>
+                <div className="flex items-center gap-2"><Cake className="w-3 h-3 text-[hsl(var(--chart-4))]" /> Cumpleaños</div>
               </div>
             </Card>
           </TabsContent>
@@ -507,10 +616,31 @@ export default function CalendarPage() {
           <TabsContent value="upcoming">
             {loading ? (
               <p className="text-sm text-muted-foreground text-center py-10">Cargando eventos...</p>
-            ) : events.length === 0 ? (
+            ) : events.length === 0 && birthdays.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-10">No hay eventos programados para {monthLabel}.</p>
             ) : (
               <div className="space-y-3">
+                {birthdays.map((b) => (
+                  <Card key={`birthday-${b.id}`} className="p-4 hover:shadow-md transition-shadow">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-[hsl(var(--chart-4)/0.15)]">
+                        <Cake className="w-5 h-5 text-[hsl(var(--chart-4))]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-semibold">{b.name}</h4>
+                          <Badge variant="outline" className="text-xs">Cumpleaños</Badge>
+                        </div>
+                        <div className="flex gap-4 text-xs text-muted-foreground mt-1 flex-wrap">
+                          <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" /> {monthShortLabel} {b.day}</span>
+                          <span className="flex items-center gap-1"><Cake className="w-3 h-3" /> Cumple {b.age} {b.age === 1 ? "año" : "años"}</span>
+                          <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {b.category}</span>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => setSelectedBirthday(b)}>Ver detalle</Button>
+                    </div>
+                  </Card>
+                ))}
                 {events.map((e) => (
                   <Card key={e.id} className="p-4 hover:shadow-md transition-shadow">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -548,6 +678,15 @@ export default function CalendarPage() {
             <DialogDescription>Eventos programados para este día</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
+            {dayOpen !== null && getBirthdaysForDay(dayOpen).map((b) => (
+              <button key={`birthday-${b.id}`} onClick={() => { setSelectedBirthday(b); setDayOpen(null); }}
+                className="w-full text-left p-3 rounded-lg border hover:border-primary/50 hover:bg-muted/40 transition-colors">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Cake className="w-3.5 h-3.5 flex-shrink-0 text-[hsl(var(--chart-4))]" /> {b.name}
+                </p>
+                <p className="text-xs text-muted-foreground">Cumple {b.age} {b.age === 1 ? "año" : "años"} • {b.category}</p>
+              </button>
+            ))}
             {dayOpen !== null && getEventForDay(dayOpen).map((e) => (
               <button key={e.id} onClick={() => { setSelected(e); setDayOpen(null); }}
                 className="w-full text-left p-3 rounded-lg border hover:border-primary/50 hover:bg-muted/40 transition-colors">
@@ -556,6 +695,37 @@ export default function CalendarPage() {
               </button>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Birthday detail popup (solo lectura) */}
+      <Dialog open={!!selectedBirthday} onOpenChange={(o) => !o && setSelectedBirthday(null)}>
+        <DialogContent className="sm:max-w-md">
+          {selectedBirthday && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-[hsl(var(--chart-4)/0.15)]">
+                    <Cake className="w-5 h-5 text-[hsl(var(--chart-4))]" />
+                  </div>
+                  <div className="text-left">
+                    <DialogTitle>{selectedBirthday.name}</DialogTitle>
+                    <DialogDescription>Cumpleaños · {selectedBirthday.category}</DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-3 text-sm pt-1">
+                <div className="p-3 rounded-lg border">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1"><CalendarDays className="w-3 h-3" /> Fecha</p>
+                  <p className="font-medium mt-1">{monthShortLabel} {selectedBirthday.day}</p>
+                </div>
+                <div className="p-3 rounded-lg border">
+                  <p className="text-xs text-muted-foreground flex items-center gap-1"><Cake className="w-3 h-3" /> Edad que cumple</p>
+                  <p className="font-medium mt-1">{selectedBirthday.age} {selectedBirthday.age === 1 ? "año" : "años"}</p>
+                </div>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
