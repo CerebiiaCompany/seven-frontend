@@ -19,6 +19,7 @@ import CalendarPage from "./pages/Calendar.tsx";
 import Attendance from "./pages/Attendance.tsx";
 import Reports from "./pages/Reports.tsx";
 import Payments from "./pages/Payments.tsx";
+import Finance from "./pages/Finance.tsx";
 import Family from "./pages/Family.tsx";
 import Forms from "./pages/Forms.tsx";
 import PublicRegister from "./pages/PublicRegister.tsx";
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
             <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/finance" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
             <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
             <Route path="/family" element={<ProtectedRoute><Family /></ProtectedRoute>} />
             <Route path="/forms" element={<ProtectedRoute><Forms /></ProtectedRoute>} />

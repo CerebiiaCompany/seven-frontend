@@ -21,7 +21,7 @@ type PaymentType = "monthly" | "enrollment" | "custom";
 type PaymentStatus = "paid" | "pending";
 type MembershipState = "al_dia" | "mora";
 
-interface Payment {
+export interface Payment {
   id: string;
   athleteId: number;
   type: PaymentType;
@@ -134,6 +134,9 @@ const readStored = <T,>(key: string, fallback: () => T): T => {
   return fallback();
 };
 
+export const loadStoredPayments = (): Payment[] =>
+  readStored(PAYMENTS_STORAGE_KEY, () => buildSeedPayments(buildAthletes()));
+
 const buildSchedule = (activation: string, payments: Payment[], today = new Date(), monthsAhead = 3): ScheduleItem[] => {
   const start = new Date(`${activation}T00:00:00`);
   const dueDay = start.getDate();
@@ -198,9 +201,7 @@ const activeBadge = (active: boolean) =>
 
 export default function Payments() {
   const [athletes] = useState<Athlete[]>(buildAthletes);
-  const [payments, setPayments] = useState<Payment[]>(() =>
-    readStored(PAYMENTS_STORAGE_KEY, () => buildSeedPayments(buildAthletes())),
-  );
+  const [payments, setPayments] = useState<Payment[]>(loadStoredPayments);
 
   useEffect(() => {
     localStorage.setItem(PAYMENTS_STORAGE_KEY, JSON.stringify(payments));

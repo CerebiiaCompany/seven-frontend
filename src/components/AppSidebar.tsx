@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, UserCog, Calendar, Trophy, CreditCard,
   BarChart3, Video, GraduationCap, Settings, ChevronLeft, ChevronRight,
-  Zap, FileText, ClipboardCheck, LogOut
+  Zap, FileText, ClipboardCheck, LogOut, Landmark
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { filterNavSections } from "@/lib/access";
@@ -33,6 +33,7 @@ export const navSections = [
     label: "Administración",
     items: [
       { icon: CreditCard, label: "Pagos", path: "/payments" },
+      { icon: Landmark, label: "Finanzas", path: "/finance" },
       { icon: FileText, label: "Formularios", path: "/forms" },
       { icon: Video, label: "Contenido", path: "/content" },
       { icon: GraduationCap, label: "Portal Futbolista", path: "/family" },
