@@ -4,7 +4,7 @@ import { LayoutDashboard, Trophy, Briefcase, User, Settings, LogOut } from "luci
 import { navSections } from "./AppSidebar";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
-import { filterNavSections } from "@/lib/access";
+import { filterNavSections, findActiveNavPath } from "@/lib/access";
 import { confirmNavigation } from "@/lib/navigation-guard";
 
 const TAB_META: Record<string, { label: string; icon: typeof LayoutDashboard }> = {
@@ -20,6 +20,7 @@ export function MobileBottomNav() {
   const { user, signOut } = useAuth();
 
   const sections = filterNavSections(navSections, user);
+  const activePath = findActiveNavPath(sections, location.pathname);
   const tabs = sections
     .filter((s) => TAB_META[s.label])
     .map((s) => ({ key: s.label, ...TAB_META[s.label] }));
@@ -30,7 +31,7 @@ export function MobileBottomNav() {
   const sectionActive = (key: string) =>
     sections
       .find((s) => s.label === key)
-      ?.items.some((i) => i.path === location.pathname) ?? false;
+      ?.items.some((i) => i.path === activePath) ?? false;
 
   const go = (path: string) => {
     if (!confirmNavigation()) return;
@@ -109,7 +110,7 @@ export function MobileBottomNav() {
                 <button
                   key={item.path}
                   onClick={() => go(item.path)}
-                  className={`sidebar-item w-full ${location.pathname === item.path ? "sidebar-item-active" : ""}`}
+                  className={`sidebar-item w-full ${activePath === item.path ? "sidebar-item-active" : ""}`}
                 >
                   <item.icon className="w-[18px] h-[18px]" />
                   <span>{item.label}</span>

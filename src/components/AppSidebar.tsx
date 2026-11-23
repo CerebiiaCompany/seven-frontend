@@ -6,7 +6,7 @@ import {
   Zap, FileText, ClipboardCheck, LogOut, Landmark
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { filterNavSections } from "@/lib/access";
+import { filterNavSections, findActiveNavPath } from "@/lib/access";
 import { confirmNavigation } from "@/lib/navigation-guard";
 import { ClubBrandMark } from "@/components/ClubBrandMark";
 
@@ -57,6 +57,7 @@ export function SidebarNav({ collapsed = false, onNavigate }: SidebarContentProp
   const location = useLocation();
   const { user } = useAuth();
   const sections = filterNavSections(navSections, user);
+  const activePath = findActiveNavPath(sections, location.pathname);
   const navRef = useRef<HTMLElement>(null);
 
   useLayoutEffect(() => {
@@ -90,7 +91,7 @@ export function SidebarNav({ collapsed = false, onNavigate }: SidebarContentProp
             )}
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const isActive = location.pathname === item.path;
+                const isActive = activePath === item.path;
                 return (
                   <button
                     key={item.path}

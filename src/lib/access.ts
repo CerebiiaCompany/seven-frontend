@@ -67,3 +67,22 @@ export function filterNavSections<T extends { items: { path: string }[] }>(
     .map((section) => ({ ...section, items: section.items.filter((item) => canAccessPath(user, item.path)) }))
     .filter((section) => section.items.length > 0);
 }
+
+/**
+ * Devuelve la ruta del único ítem de menú activo para `pathname`: coincidencia
+ * exacta o subruta real (/players/luz-blanco activa /players, /players-algo no).
+ * "/" solo coincide exactamente y, si varias coinciden, gana la más específica.
+ */
+export function findActiveNavPath(
+  sections: { items: { path: string }[] }[],
+  pathname: string,
+): string | null {
+  let active: string | null = null;
+  for (const { items } of sections) {
+    for (const { path } of items) {
+      const matches = pathname === path || (path !== "/" && pathname.startsWith(`${path}/`));
+      if (matches && (active === null || path.length > active.length)) active = path;
+    }
+  }
+  return active;
+}
