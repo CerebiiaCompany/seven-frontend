@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { loadStoredPayments } from "@/pages/Payments";
+import api from "@/lib/api";
 import type { Payment } from "@/pages/Payments";
 
 interface Expense {
@@ -85,7 +85,7 @@ const loadExpenses = (year: number, lastMonth: number): Expense[] => {
 
 const balanceFor = (prefix: string, payments: Payment[], expenses: Expense[]) => {
   const income = payments
-    .filter((p) => p.status === "paid" && p.date.startsWith(prefix))
+    .filter((p) => p.status === "approved" && (p.paid_at ?? p.created_at).startsWith(prefix))
     .reduce((sum, p) => sum + p.amount, 0);
   const expense = expenses.filter((e) => e.date.startsWith(prefix)).reduce((sum, e) => sum + e.amount, 0);
   return { income, expenses: expense, net: income - expense };
@@ -131,7 +131,16 @@ export default function Finance() {
   const year = today.getFullYear();
 
   const [expenses, setExpenses] = useState<Expense[]>(() => loadExpenses(year, today.getMonth() + 1));
-  const [payments] = useState<Payment[]>(loadStoredPayments);
+  const [payments, setPayments] = useState<Payment[]>([]);
+
+  useEffect(() => {
+    api.get<{ results?: Payment[] } | Payment[]>("/payments/?page_size=500")
+      .then((res) => {
+        const raw = res.data;
+        setPayments(Array.isArray(raw) ? raw : (raw as { results?: Payment[] }).results ?? []);
+      })
+      .catch(() => {/* silencioso en finanzas */ });
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(EXPENSES_STORAGE_KEY, JSON.stringify(expenses));
@@ -169,7 +178,7 @@ export default function Finance() {
     type,
     label,
     value: payments
-      .filter((p) => p.status === "paid" && p.type === type && p.date.startsWith(month))
+      .filter((p) => p.status === "approved" && p.type === type && (p.paid_at ?? p.created_at).startsWith(month))
       .reduce((sum, p) => sum + p.amount, 0),
   }));
 
